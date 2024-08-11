@@ -1,0 +1,12 @@
+nodemon --watch "./src/**/*" -e ts --exec "node register-loader.js":
+--watch "./src/**/*": Watches all files in the src directory with any extension.
+-e ts: Specifically watches for changes in files with the .ts extension.
+--exec "node register-loader.js": Runs the node register-loader.js command when a change is detected.
+
+for 'dev' script created a register-loader.js file in the root dir for avoiding warings 
+
+if you detected this file the 'dev' script would be ;
+
+"dev": "nodemon --watch \"./src/**/*\" -e ts --exec \"node --loader ts-node/esm src/server.ts\""
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
