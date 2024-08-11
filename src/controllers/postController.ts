@@ -64,6 +64,15 @@ export const insertPost = async (req: Request, res: Response) => {
 
 export const getPosts = async (req: Request, res: Response) => {
     try {
+
+        const populateComment = {
+            path: "comments",
+            populate: {
+                path: "user",
+                select:"name email"
+            }
+        };
+
         const limit = parseInt(req.query.limit as string) || 20;
         const posts = await Post.find()
             .populate('agency', ['name', 'profile_image', 'user_id'])
@@ -71,7 +80,8 @@ export const getPosts = async (req: Request, res: Response) => {
             .populate('destination')
             .populate('seats')
             .populate('midpoints')
-            .populate('comments')
+            // .populate('comments')
+            .populate(populateComment)
             .populate('likes')
             .limit(limit)
             .sort({ createdAt: -1 })
@@ -143,30 +153,6 @@ export const getPostById = async (req: Request, res: Response) => {
     }
 }
 
-// ? : Find Post of a User
-export const getPostByUserId = async (req: Request, res: Response) => {
-
-    // const { user_id } = req.params;
-
-    // if(!user_id){
-    //     return res.status(400).json({
-    //         error:"error",
-    //         message: `Invalid User Id ${user_id}`,
-    //     })
-    // }
-    // try {
-        
-    //     const posts = await Post.find()
-    // } catch (error) {
-    //     return res.status(500).json({
-    //         error:"error",
-    //         message: `Internal Server Error ${error}`,
-    //     })
-    // }
-}
-
-
-
 // ? : [likes] update likeCounts of a post ( like || unlike )
 
 export const likePost = async (req: Request, res: Response) => {
@@ -188,7 +174,7 @@ export const likePost = async (req: Request, res: Response) => {
         //     error: "error",
         //     message: "User has already liked this post."
         // });
-        await Post.findByIdAndDelete(post_id, {
+        await Post.findByIdAndUpdate(post_id, {
             $inc: { likeCounts: -1 },
             $pull: { likes: existingLike._id }
         });
@@ -267,7 +253,6 @@ export const UnlikePost = async (req: Request, res: Response) => {
 }
 
 
-
 // ? Endpoint to get users who liked a post
 
 export const getLikesForPost = async (req: Request, res: Response) => {
@@ -294,7 +279,7 @@ export const getLikesForPost = async (req: Request, res: Response) => {
         return res.status(200).send({
             message: "success",
             status: 200,
-            data: post.likes
+            data: [post]
         });
     } catch (error) {
         return res.status(500).send({
@@ -381,6 +366,41 @@ export const updateComment = async (req: Request, res: Response) => {
 
     // const updatedComment = await Comment.findByIdAndUpdate(comment_id,)
 
+}
+
+// ? Find Comments By post ID
+
+export const getCommentsByPostId = async (req: Request, res: Response) => {
+    
+    const { post_id } = req.params;
+
+    if (!post_id) {
+        return res.status(400).json({
+            message: `Bad Request! Required Field Missing`,
+            error:"error"
+        });
+
+    }
+
+    try {
+
+    const comments = await Comment.find({post:post_id}).populate('user');
+        
+        log(`comments : ${comments}`)
+        
+        return res.status(200).send({
+            message: `success`,
+            data:comments
+        })
+
+    } catch (error) {
+
+        return res.status(400).json({
+            message: `Server Error (${error})`,
+            error:"error"
+        });
+
+    }
 }
 
 //// [ changing _id to id for Mobile Json ]

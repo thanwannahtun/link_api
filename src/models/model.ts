@@ -4,15 +4,15 @@ export interface IUser extends Document {
     name: string;
     email: string;
     password: string;
-  }
-  
-  const userSchema = new Schema<IUser>({
+}
+
+const userSchema = new Schema<IUser>({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true }
-  });
-  
-export  const User = mongoose.model<IUser>('User', userSchema);
+});
+
+export const User = mongoose.model<IUser>('User', userSchema);
 
 export interface IAgency extends Document {
     user_id: Types.ObjectId, // reference to User
@@ -34,20 +34,20 @@ const AgencySchema: Schema = new Schema<IAgency>({
     profile_image: { type: String, required: true },
     location: { type: Map, required: true },
     logo: { type: String, },
-    user_id:{type:Schema.Types.ObjectId,ref:"User",required:true}
+    user_id: { type: Schema.Types.ObjectId, ref: "User", required: true }
 }, { timestamps: true });
 
 export const Agency = mongoose.model<IAgency>('Agency', AgencySchema);
 
 export interface ICountry extends Document {
-    name:string
+    name: string
 }
 
 const CountrySchema: Schema = new Schema<ICountry>({
-    name:{ type : String,required:true}
+    name: { type: String, required: true }
 })
 
-export const Country = mongoose.model<ICountry>('Country',CountrySchema);
+export const Country = mongoose.model<ICountry>('Country', CountrySchema);
 
 export interface ICity extends Document {
     name: string;
@@ -56,7 +56,7 @@ export interface ICity extends Document {
 
 const CitySchema: Schema = new Schema<ICity>({
     name: { type: String, required: true },
-    country: { type: Schema.Types.ObjectId, ref:"Country", required: true }
+    country: { type: Schema.Types.ObjectId, ref: "Country", required: true }
 });
 
 export const City = mongoose.model<ICity>('City', CitySchema);
@@ -70,7 +70,7 @@ export interface ISeat extends Document {
 const SeatSchema: Schema = new Schema<ISeat>({
     number: { type: String, required: true },
     type: { type: String, required: true },
-    status: { type: String , enum:["available","booked"], default:"available"}
+    status: { type: String, enum: ["available", "booked"], default: "available" }
 });
 
 export const Seat = mongoose.model<ISeat>('Seat', SeatSchema);
@@ -79,20 +79,20 @@ export const Seat = mongoose.model<ISeat>('Seat', SeatSchema);
 export interface IMidPoint extends Document {
     city: mongoose.Types.ObjectId;
     arrivalTime: Date;
-    order:number
+    order: number
 }
 
 const MidPointSchema: Schema = new Schema<IMidPoint>({
     city: { type: Schema.Types.ObjectId, ref: 'City', required: true },
-    arrivalTime: { type: Date},
-    order:{type:Number}
+    arrivalTime: { type: Date },
+    order: { type: Number }
 });
 
 export const MidPoint = mongoose.model<IMidPoint>('MidPoint', MidPointSchema);
 
 
 export interface IComment extends Document {
-    post:mongoose.Types.ObjectId;
+    post: mongoose.Types.ObjectId;
     user: mongoose.Types.ObjectId;
     content: string;
     createdAt: Date;
@@ -109,14 +109,14 @@ export const Comment = mongoose.model<IComment>('Comment', CommentSchema);
 
 
 export interface ILike extends Document {
-    post:mongoose.Types.ObjectId,
+    post: mongoose.Types.ObjectId,
     user: mongoose.Types.ObjectId;
     createdAt: Date;
 }
 
 const LikeSchema: Schema = new Schema<ILike>({
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    post:{type: Schema.Types.ObjectId , ref : "Post" , required: true},
+    post: { type: Schema.Types.ObjectId, ref: "Post", required: true },
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -149,7 +149,7 @@ const PostSchema: Schema = new Schema<IPost>({
     scheduleDate: { type: Date, required: true },
     pricePerTraveler: { type: Number, required: true },
     // seats: [{ type: Schema.Types.ObjectId, ref: 'Seat' }],
-    seats:[SeatSchema],
+    seats: [SeatSchema],
     midpoints: [MidPointSchema],
     commentCounts: { type: Number, default: 0 },
     likeCounts: { type: Number, default: 0 },

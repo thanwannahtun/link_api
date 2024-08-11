@@ -2,19 +2,24 @@ import { Response, Request } from "express";
 import { log } from "console";
 import { Agency, IAgency } from "../models/model.js";
 
-async function checkAgency(email: String): Promise<IAgency | null> {
-    log("check")
+async function checkAgency(email: String, password: String): Promise<IAgency | null> {
+
+    log(`check -> email : ${email} , password : ${password} `)
     return await Agency.findOne<IAgency>({ email: email });
 }
 
+async function checkEmailAndPassword(_req: Request, _res: Response,) {
 
+}
+
+// ? : Create New Agency
 export const signUpAgency = async (req: Request, res: Response) => {
     log(`body : ${JSON.stringify(req.body)}`);
 
-    const { email } = req.body as IAgency;
+    const { email, password } = req.body as IAgency;
 
     // validation
-    const existed = await checkAgency(email);
+    const existed = await checkAgency(email, password);
 
     log(`checkAgency: ${existed}`);
 
@@ -46,26 +51,27 @@ export const signUpAgency = async (req: Request, res: Response) => {
             message: `Error ${error}`
         });
     }
+
 }
+
+// ? : Sign In to Agency
 
 export const signInAgency = async (req: Request, res: Response) => {
 
     const { email, password } = req.body as IAgency;
 
-    /// validation
-    const agency = await checkAgency(email);
-    if (agency === null) {
-        return res.status(404).send({
-            message: `${email} Not Found!`,
-            error: "error",
-            status: 404
-        })
-    }
-
-    // compare password 
-
-
     try {
+        /// validation
+        const agency = await checkAgency(email, password);
+        if (agency === null) {
+            return res.status(404).send({
+                message: `${email} Not Found!`,
+                error: "error",
+                status: 404
+            })
+        }
+
+        // compare password 
 
         res.status(200).send({
             message: "success",
@@ -84,9 +90,9 @@ export const signInAgency = async (req: Request, res: Response) => {
 
 export const signOutAgency = async (req: Request, res: Response) => {
 
-    const { email } = req.body as IAgency;
+    const { email, password } = req.body as IAgency;
 
-    const agency = await checkAgency(email);
+    const agency = await checkAgency(email, password);
 
     if (agency === null) {
         return res.status(404).send({
