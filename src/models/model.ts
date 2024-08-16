@@ -140,6 +140,7 @@ export interface IPost extends Document {
     title: string;
     description: string;
     createdAt: Date;
+    images: string[]; // Add this line for images
 }
 
 const PostSchema: Schema = new Schema<IPost>({
@@ -158,7 +159,8 @@ const PostSchema: Schema = new Schema<IPost>({
     likes: [{ type: Schema.Types.ObjectId, ref: 'Like' }],
     title: { type: String, required: true },
     description: { type: String, required: true },
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    images: [{ type: String }] // Add this line
 });
 
 export const Post = mongoose.model<IPost>('Post', PostSchema);

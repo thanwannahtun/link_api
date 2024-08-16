@@ -3,6 +3,7 @@ import { log } from "console";
 import { Agency, IAgency, Post } from "../models/model.js";
 
 
+// ? : Get All Agencies ( optional limit query )
 export const getAllAgencies = async (req: Request, res: Response) => {
 
     const { limit } = req.query;
@@ -11,7 +12,7 @@ export const getAllAgencies = async (req: Request, res: Response) => {
 
         const agencies = await Agency.find().limit(limit ? Number(limit) : 20);
         log(`Agencies : ${agencies}`)
-        return res.status(200).send({
+        return res.status(200).json({
             message: "success",
             data: agencies,
             status: 200
@@ -28,6 +29,7 @@ export const getAllAgencies = async (req: Request, res: Response) => {
 
 }
 
+// ? : Find Agency With User Id
 export const getAgencyWithUserId = async (req: Request, res: Response) => {
     log(`param : ${JSON.stringify(req.params)}`)
 

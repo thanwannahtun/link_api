@@ -1,7 +1,7 @@
 
 
 import { Router } from 'express';
-import { insertPost, getPosts, likePost, getPostById, getLikesForPost, addComment, updateComment, getCommentsByPostId } from '../controllers/postController.js';
+import { insertPost, getPosts, likePost, getPostById, getLikesForPost } from '../controllers/postController.js';
 
 const router = Router();
 
@@ -11,8 +11,8 @@ router.get('/', getPosts);
 // ? : create a new post
 router.post('/', insertPost);
 
-// ? : [likes] update likeCounts of a post ( like || unlike )
-router.post('/:post_id/likes/:user_id', likePost); // ! uncomplete code ( fix later )
+// ? : Handler to toggle like on a post
+router.post('/:post_id/likes/:user_id', likePost); 
 
 // ? Endpoint to get users who liked a post
 router.post('/:post_id/likes', getLikesForPost)
@@ -20,13 +20,5 @@ router.post('/:post_id/likes', getLikesForPost)
 // ? : Find Single Post By Post _id
 router.post('/:post_id', getPostById)
 
-// ? Endpoint to add a comment
-router.post('/:post_id/users/:user_id/comments', addComment)
-
-// ? Endpoint to update a comment 
-router.patch('/:post_id/users/:user_id/comments/:comment_id', updateComment) // ! uncomplete code
-
-// ? Find Comments By post ID
-router.post('/:post_id/comments', getCommentsByPostId);
 
 export default router;

@@ -5,10 +5,11 @@ import { getAllAgencies, getAgencyWithUserId, getPostByAgencyId } from '../contr
 
 const router = Router();
 
+// ? : Get All Agencies ( optional limit query )
 router.get('/', getAllAgencies);
 
-
-router.get('/:user_id', getAgencyWithUserId); // ! uncomplete codes ( user_id is string but expect ObjectId )
+// ? : Find Agency With User Id
+router.get('/:user_id', getAgencyWithUserId);
 
 // ? : Find Posts of a Agency
 router.post('/:agency_id/posts', getPostByAgencyId);
