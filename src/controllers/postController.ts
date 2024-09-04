@@ -24,11 +24,26 @@ export const insertPost = async (req: Request, res: Response) => {
     }
 
 
-    const post: IPost = new Post(req.body);
     try {
-        const savedpost = await post.save();
+        const post: IPost = new Post(req.body);
 
+
+        const savedpost = await post.save();
+    
+        
         log(`savedpost ${JSON.stringify(savedpost)}`);
+
+
+        if (!savedpost._id) {
+            log(`Error: saved post does not have an _id`);
+            return res.status(500).send({
+                error: "error",
+                status: 500,
+                message: "Failed to save post. No _id was generated."
+            });
+        }
+
+    
 
         const populateMidpoint = {
             path: "midpoints", populate: {

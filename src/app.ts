@@ -7,6 +7,7 @@ const app = express();
 
 // Middleware
 app.use(bodyParser.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api', routes);
