@@ -79,12 +79,16 @@ export const Seat = mongoose.model<ISeat>('Seat', SeatSchema);
 export interface IMidPoint extends Document {
     city: mongoose.Types.ObjectId;
     arrivalTime: Date;
+    departureTime: Date;
+    description: string,
     order: number
 }
 
 const MidPointSchema: Schema = new Schema<IMidPoint>({
     city: { type: Schema.Types.ObjectId, ref: 'City', required: true },
     arrivalTime: { type: Date },
+    departureTime: { type: Date },
+    description: { type: String },
     order: { type: Number }
 });
 
@@ -131,7 +135,8 @@ export interface IPost extends Document {
     scheduleDate: Date;
     pricePerTraveler: number;
     seats: mongoose.Types.ObjectId[];
-    midpoints: mongoose.Types.ObjectId[];
+    // midpoints: mongoose.Types.ObjectId[];
+    midpoints: IMidPoint[];
     commentCounts: number;
     likeCounts: number;
     shareCounts: number;

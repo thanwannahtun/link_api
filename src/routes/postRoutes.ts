@@ -1,18 +1,20 @@
 
 
 import { Router } from 'express';
-import { insertPost, getPosts, likePost, getPostById, getLikesForPost } from '../controllers/postController.js';
+import { getPosts, likePost, getPostById, getLikesForPost, insertPostMe } from '../controllers/postController.js';
+import { uploadFormData } from '../middlewares/multer.js';
 
 const router = Router();
 
-// ? : get posts with limit query of default to 20
+// ? : get posts with limit query of default to 15
 router.get('/', getPosts);
 
 // ? : create a new post
-router.post('/', insertPost);
+// router.post('/', uploadPostImages, insertPost);
+router.post('/', uploadFormData, insertPostMe);
 
 // ? : Handler to toggle like on a post
-router.post('/:post_id/likes/:user_id', likePost); 
+router.post('/:post_id/likes/:user_id', likePost);
 
 // ? Endpoint to get users who liked a post
 router.post('/:post_id/likes', getLikesForPost)
