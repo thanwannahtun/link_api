@@ -1,38 +1,27 @@
 import { Request, Response } from "express";
 
+
 import { Agency, IPost, Like, Post, ILike } from "../models/model.js";
 import { log } from "console";
+import fs from 'fs';
 
-import multer from 'multer';
 import { Worker } from 'worker_threads';
-import path from 'path';
-import fs from "fs";
+import path, { dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-
-// Setup multer for file uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, 'uploads/'); // Directory to store uploaded files
-    },
-    filename: (req, file, cb) => {
-      cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-    }
-  });
-  
-  const upload = multer({ storage: storage });
-
-  // Middleware to handle file uploads
-export const uploadPostImages = upload.array('images'); // Adjust 'images' and limit as needed
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export const insertPost = async (req: Request, res: Response) => {
     const { agency } = req.body as IPost;
     
-    log(`agency id ::: ${agency}`);
+    log(`agency ${agency}`);
+    log(`request body ::: ${JSON.stringify(req.body)}`);
+    
+
   
     const agencyExisted = await Agency.findById(agency);
-  
-    log(`body : ${JSON.stringify(req.body)}`);
+
     log(`agencyExisted : ${agencyExisted}`);
   
     if (!agencyExisted) {
@@ -43,10 +32,13 @@ export const insertPost = async (req: Request, res: Response) => {
     }
   
     try {
-      const post: IPost = new Post(req.body);
-  
+    //   const post: IPost = new Post(req.body);
+      const post: IPost = await Post.create(req.body);
+        log(`created post : ${post}`)
       // Save initial post
-      const savedPost = await post.save();
+        const savedPost = await post.save();
+        
+        log(`post saved ::: ${savedPost}`);
   
       if (!savedPost._id) {
         log(`Error: saved post does not have an _id`);
@@ -58,18 +50,25 @@ export const insertPost = async (req: Request, res: Response) => {
       }
   
       // Handle image compression in worker threads
-      const imagePaths = (req.files as Express.Multer.File[]).map(file => file.path);
+        const imagePaths = (req.files as Express.Multer.File[]).map(file => file.path);
         log(`imagePaths : [before compressed] : ${imagePaths}`);
         const compressedImagePaths: string[] = [];
+        log(`dirname ${__dirname}`);
         
       const compressionPromises = imagePaths.map(imagePath => {
         return new Promise((resolve, reject) => {
-          const outputFilePath = imagePath.replace('uploads/', 'uploads/compressed-');
+            const outputFilePath = imagePath.replace('uploads/', 'uploads/compressed-');
+            log(` outputFilePath ${outputFilePath}`)
+            
           const worker = new Worker(path.join(__dirname, '../workers/imageWorker.ts'), {
             workerData: { inputFilePath: imagePath, outputFilePath }
           });
+            
+            log(`worker ::: ${worker.threadId}`);
   
-          worker.on('message', (message) => {
+            worker.on('message', (message) => {
+            log(` on message ${message}`)
+              
             if (message.error) {
               reject(new Error(message.error));
             } else {
@@ -78,11 +77,14 @@ export const insertPost = async (req: Request, res: Response) => {
             }
           });
   
-          worker.on('error', (error) => {
+            worker.on('error', (error) => {
+            log(` on error ${error}`)
             reject(error);
           });
   
-          worker.on('exit', (code) => {
+            worker.on('exit', (code) => {
+            log(`on exit ${code}`)
+              
             if (code !== 0) {
               reject(new Error(`Worker exited with code ${code}`));
             }
@@ -90,9 +92,14 @@ export const insertPost = async (req: Request, res: Response) => {
         });
       });
   
-        await Promise.all(compressionPromises);
-        log(`imagePaths : [after compressed] : ${imagePaths}`);
-        
+        await Promise.all(compressionPromises).then((v)=> {
+            log(`values primise ${v}`)
+        }, (e) => {
+            log(`error promise ${e}`)
+            
+        });
+        log(`imagePaths : ${imagePaths}: [after compressed] :`);
+        log(`compressedImagePaths legth ::: ${compressedImagePaths.length}`)
         // Optional: Delete original uncompressed images
         imagePaths.forEach(imagePath => {
             fs.unlink(imagePath, (err) => {
@@ -134,7 +141,9 @@ export const insertPost = async (req: Request, res: Response) => {
   
       const response = await Post.findOne({ _id: savedPost._id })
         .populate([populateAgency, "origin", "destination", "comments", "likes"])
-        .populate(populateMidpoint);
+          .populate(populateMidpoint)
+        
+          ;
   
       log(`response ${JSON.stringify(response)}`);
       log(`response : JSON.stringify : ${response}`);
@@ -159,14 +168,10 @@ export const insertPost = async (req: Request, res: Response) => {
 // ? : create a new post
 export const insertPostMe = async (req: Request, res: Response) => {
 
-    const { agency } = req.body as IPost;
-
+    const { agency , midpoints } = req.body as IPost;
     const agencyExisted = await Agency.findById(agency);
 
-    log(`body : ${JSON.stringify(req.body)}`);
-
-
-    log(`agencyExisted : ${agencyExisted}`)
+    log(`agencyExisted : ${agencyExisted?.id}`)
 
     if (!agencyExisted) {
         return res.status(400).send({
@@ -179,12 +184,15 @@ export const insertPostMe = async (req: Request, res: Response) => {
     try {
         const post: IPost = new Post(req.body);
 
-
-        const savedpost = await post.save();
-    
+        // const images = (req.files as Express.Multer.File[])?.map((file: Express.Multer.File) => file.path);
+        // const baseUrl = `${req.protocol}://${req.get('host')}`; // e.g., http://localhost:3000
+        const images = (req.files as Express.Multer.File[]).map(file => `/uploads/${path.basename(file.path)}`);
         
-        log(`savedpost ${JSON.stringify(savedpost)}`);
+        post.images = images;
+        log(`images ::: ${images.map(i => i)}`)
+        const savedpost = await post.save();
 
+        log(`savedpost ${savedpost}`);
 
         if (!savedpost._id) {
             log(`Error: saved post does not have an _id`);
@@ -195,11 +203,19 @@ export const insertPostMe = async (req: Request, res: Response) => {
             });
         }
 
+        const populateAgency = {
+            path: "agency",
+            select: ['name', 'profile_image', 'user_id'],
+            populate: {
+                path: 'user_id',
+            }
+        }
     
 
         const populateMidpoint = {
             path: "midpoints", populate: {
-                path: "city", select: "_id name"
+                path: "city",
+                // select: "_id name"
             },
             options: {
                 sort: { order: -1 } // Sort by order field
@@ -207,12 +223,9 @@ export const insertPostMe = async (req: Request, res: Response) => {
         };
 
         // * find the inserted post and return the response
-
-        const response = await Post.findOne({ _id: savedpost._id }).populate(["agency", "origin", "destination", "comments", "likes"]).populate(populateMidpoint)
-
-        log(`response ${JSON.stringify(response)}`);
-        log(`response : JSON.stringify : ${response}`);
-
+   
+        const response = await Post.findOne({ _id: savedpost._id }).populate([populateAgency,populateMidpoint, "origin", "destination", "comments", "likes"])
+        log(`response ${response}`);
         return res.status(201).send({
             message: "success",
             status: 201,
@@ -230,8 +243,11 @@ export const insertPostMe = async (req: Request, res: Response) => {
 
 }
 
+let count = 0;
 
 export const getPosts = async (req: Request, res: Response) => {
+    count++;
+    log(`count ::: ${count}`);
     try {
 
         const populateAgency = {
@@ -263,11 +279,10 @@ export const getPosts = async (req: Request, res: Response) => {
             path: "midpoints",
             populate: {
                 path: "city",
-                
             }
         }
 
-        const limit = parseInt(req.query.limit as string) || 20;
+        const limit = parseInt(req.query.limit as string) || 15;
         const posts = await Post.find()
             .populate(populateAgency)
             .populate('origin')
@@ -283,7 +298,7 @@ export const getPosts = async (req: Request, res: Response) => {
 
         log(`posts : ${posts}}`)
 
-        res.json(posts.map(post => ({
+        const postsJson = posts.map(post => ({
             _id: post._id,
             agency: post.agency,
             origin: post.origin,
@@ -301,7 +316,14 @@ export const getPosts = async (req: Request, res: Response) => {
             title: post.title,
             description: post.description,
             images:post.images
-        })));
+        }));
+        return res.json({
+            
+            status: 200,
+            message: "success",
+            data:postsJson
+        });
+
     } catch (error) {
         log(`Error: ${error}`);
         return res.status(500).json({

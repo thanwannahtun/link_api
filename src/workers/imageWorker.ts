@@ -1,5 +1,6 @@
 
 import sharp from 'sharp';
+import fs from "fs";
 import { parentPort, workerData } from 'worker_threads';
 
 interface WorkerData {
@@ -8,6 +9,12 @@ interface WorkerData {
 }
 
 const { inputFilePath, outputFilePath } = workerData as WorkerData;
+
+// Validate file path
+if (!fs.existsSync(workerData.inputFilePath)) {
+    parentPort?.postMessage({ error: `File not found: ${workerData.inputFilePath}` });
+    process.exit(1);
+}
 
 sharp(inputFilePath)
     .resize({ width: 800 }) // Example resizing, you can adjust this
