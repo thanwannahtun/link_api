@@ -24,10 +24,12 @@ app.use('/uploads', express.static(path.join(__dirname, './uploads')));
 app.use('/api', routes);
 
 // MongoDB connection
-const mongoURI = "mongodb+srv://thanwanna:449206487!@?mongodbatlas@linkmyanmar.0fvzb.mongodb.net/?retryWrites=true&w=majority&appName=linkMyanmar";
+// const mongoURI = "mongodb+srv://thanwanna:449206487!@?mongodbatlas@linkmyanmar.0fvzb.mongodb.net/linkMyanmarDB?retryWrites=true&w=majority&appName=linkMyanmar";
+const mongoURI = "mongodb+srv://linkMyanmarPassword:linkMyanmarPassword@linkmyanmar.0fvzb.mongodb.net/linkMyanmarDB?retryWrites=true&w=majority&appName=linkMyanmar";
+
 // const mongoURI = 'mongodb://localhost:27017/link_myanmar';
 mongoose.connect(mongoURI, {})
     .then(() => console.log('MongoDB connected'))
-    .catch(() => console.log("Error Connecting MongoDB"));
+    .catch((e) => console.log("Error Connecting MongoDB", e));
 
 export default app;

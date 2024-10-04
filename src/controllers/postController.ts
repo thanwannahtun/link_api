@@ -246,6 +246,9 @@ export const insertPostMe = async (req: Request, res: Response) => {
 let count = 0;
 
 export const getPosts = async (req: Request, res: Response) => {
+
+    
+
     count++;
     log(`count ::: ${count}`);
     try {
