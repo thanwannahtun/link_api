@@ -3,9 +3,161 @@ import { Request, Response } from "express";
 import { Agency, IPost, Like, Post, ILike } from "../models/model.js";
 import { log } from "console";
 
+import multer from 'multer';
+import { Worker } from 'worker_threads';
+import path from 'path';
+import fs from "fs";
+
+
+// Setup multer for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, 'uploads/'); // Directory to store uploaded files
+    },
+    filename: (req, file, cb) => {
+      cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+    }
+  });
+  
+  const upload = multer({ storage: storage });
+
+  // Middleware to handle file uploads
+export const uploadPostImages = upload.array('images'); // Adjust 'images' and limit as needed
+
+
+export const insertPost = async (req: Request, res: Response) => {
+    const { agency } = req.body as IPost;
+    
+    log(`agency id ::: ${agency}`);
+  
+    const agencyExisted = await Agency.findById(agency);
+  
+    log(`body : ${JSON.stringify(req.body)}`);
+    log(`agencyExisted : ${agencyExisted}`);
+  
+    if (!agencyExisted) {
+      return res.status(400).send({
+        error: "error",
+        message: `Agency with the ID not found! (${agency})`
+      });
+    }
+  
+    try {
+      const post: IPost = new Post(req.body);
+  
+      // Save initial post
+      const savedPost = await post.save();
+  
+      if (!savedPost._id) {
+        log(`Error: saved post does not have an _id`);
+        return res.status(500).send({
+          error: "error",
+          status: 500,
+          message: "Failed to save post. No _id was generated."
+        });
+      }
+  
+      // Handle image compression in worker threads
+      const imagePaths = (req.files as Express.Multer.File[]).map(file => file.path);
+        log(`imagePaths : [before compressed] : ${imagePaths}`);
+        const compressedImagePaths: string[] = [];
+        
+      const compressionPromises = imagePaths.map(imagePath => {
+        return new Promise((resolve, reject) => {
+          const outputFilePath = imagePath.replace('uploads/', 'uploads/compressed-');
+          const worker = new Worker(path.join(__dirname, '../workers/imageWorker.ts'), {
+            workerData: { inputFilePath: imagePath, outputFilePath }
+          });
+  
+          worker.on('message', (message) => {
+            if (message.error) {
+              reject(new Error(message.error));
+            } else {
+                compressedImagePaths.push(outputFilePath);
+              resolve(message.success);
+            }
+          });
+  
+          worker.on('error', (error) => {
+            reject(error);
+          });
+  
+          worker.on('exit', (code) => {
+            if (code !== 0) {
+              reject(new Error(`Worker exited with code ${code}`));
+            }
+          });
+        });
+      });
+  
+        await Promise.all(compressionPromises);
+        log(`imagePaths : [after compressed] : ${imagePaths}`);
+        
+        // Optional: Delete original uncompressed images
+        imagePaths.forEach(imagePath => {
+            fs.unlink(imagePath, (err) => {
+                if (err) {
+                    log(`Failed to delete original image: ${imagePath}, Error: ${err.message}`);
+                }
+                log(`deted images path :: ${imagePath}`);
+    });
+        });
+        
+        log(`imagePaths : [before unlinked] : ${imagePaths}`);
+
+  
+  
+      // Optional: Update the post with the paths of the compressed images
+      post.images = compressedImagePaths; // Adjust accordingly
+        await post.save();
+        
+        log(`post.images : [after saved] : ${post.images}`);
+        const populateAgency = {
+            path: "agency",
+            select: ['name', 'profile_image', 'user_id'],
+            populate: {
+                path: 'user_id',
+                select:"name email password"
+            }
+        }
+  
+      const populateMidpoint = {
+        path: "midpoints",
+        populate: {
+          path: "city",
+          select: "_id name"
+        },
+        options: {
+          sort: { order: -1 }
+        }
+      };
+  
+      const response = await Post.findOne({ _id: savedPost._id })
+        .populate([populateAgency, "origin", "destination", "comments", "likes"])
+        .populate(populateMidpoint);
+  
+      log(`response ${JSON.stringify(response)}`);
+      log(`response : JSON.stringify : ${response}`);
+  
+      return res.status(201).send({
+        message: "success",
+        status: 201,
+        data: [response]
+      });
+    } catch (error) {
+      log(`Error: ${error}`);
+      return res.status(500).send({
+        error: "error",
+        status: 500,
+        message: `Error ${error}`
+      });
+    }
+  };
+
+/* ---------------------------------------------------- */
 
 // ? : create a new post
-export const insertPost = async (req: Request, res: Response) => {
+export const insertPostMe = async (req: Request, res: Response) => {
 
     const { agency } = req.body as IPost;
 

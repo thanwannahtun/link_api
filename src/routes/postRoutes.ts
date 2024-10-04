@@ -12,7 +12,7 @@ router.get('/', getPosts);
 router.post('/', insertPost);
 
 // ? : Handler to toggle like on a post
-router.post('/:post_id/likes/:user_id', likePost); 
+router.post('/:post_id/likes/:user_id', likePost);
 
 // ? Endpoint to get users who liked a post
 router.post('/:post_id/likes', getLikesForPost)
