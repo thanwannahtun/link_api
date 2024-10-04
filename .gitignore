@@ -1,2 +1,7 @@
 node_modules/
 dist/
+note/
+reference_and_tests/
+mock
+configuration
+src/uploads
