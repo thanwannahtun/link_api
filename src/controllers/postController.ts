@@ -8,6 +8,7 @@ import fs from 'fs';
 import { Worker } from 'worker_threads';
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { PopulateOptions } from "mongoose";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -243,16 +244,19 @@ export const insertPostMe = async (req: Request, res: Response) => {
 
 }
 
-let count = 0;
+interface GetPostQuery  {
+    categoryType?: "trending" | "sponsored" | "suggested";
+}
+
+
+type GetPostParam = {
+    limit?: number;
+    populate: PopulateOptions | (string | PopulateOptions)[];
+    sort: {}
+}
 
 export const getPosts = async (req: Request, res: Response) => {
-
-    
-
-    count++;
-    log(`count ::: ${count}`);
     try {
-
         const populateAgency = {
             path: "agency",
             select: ['name', 'profile_image', 'user_id'],
@@ -285,7 +289,7 @@ export const getPosts = async (req: Request, res: Response) => {
             }
         }
 
-        const limit = parseInt(req.query.limit as string) || 15;
+        const limit = parseInt(req.query.limit as string) || 10;
         const posts = await Post.find()
             .populate(populateAgency)
             .populate('origin')
@@ -335,6 +339,130 @@ export const getPosts = async (req: Request, res: Response) => {
             message: `Error ${error}`
         });
     }
+}
+
+export const getPostByCategory = async (req: Request, res: Response) => {
+
+    const { categoryType  } = req.query as GetPostQuery;
+    log(`GetPostQuery ::: ${JSON.stringify(req.query)}`)
+
+    const populateAgency = {
+        path: "agency",
+        select: ['name', 'profile_image', 'user_id'],
+        populate: {
+            path: 'user_id',
+            select:"name email password"
+        }
+    }
+    const populateComment = {
+        path: "comments",
+        populate: {
+            path: "user",
+            select:"name email"
+        }
+    };
+    const populateLike = {
+        path: "likes",
+        populate: {
+            path: "user",
+            select :"name email"
+        }
+    }
+    const populateMidpoints = {
+        path: "midpoints",
+        populate: {
+            path: "city",
+        }
+    }
+
+
+    const populateArray = [
+        populateAgency, populateComment , populateLike , populateMidpoints , "origin", "destination"
+    ];
+
+try {
+    let posts: IPost[] = [];
+   
+            if (categoryType === "sponsored") {
+                posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit : parseInt((req.query.limit ?? 10 ) as string)});
+            } else if (categoryType === "trending") {
+                posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit : parseInt((req.query.limit ?? 10 ) as string)});
+            } else if (categoryType === "suggested") {
+                posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit : parseInt((req.query.limit ?? 10 ) as string)});
+            }
+            else {
+                posts = [];
+            }
+    
+    log(`=============== post:::: ${JSON.stringify(posts)}`)
+            return res.send(
+                {
+                    status: 200,
+                    message: "success",
+                    data:posts
+                }
+            );
+    } catch (error ) {
+            res.status(500).send(
+                {
+                    error: "Internal Server Error", 
+                    message:( error as Error).message,
+                    data:[]
+                }
+            );
+    }
+
+    async function getSponsoredPost(param: GetPostParam) {
+       return queryRoutes(param);
+    }
+
+    async function getTrendingPost(param: GetPostParam) {
+        log(`=============== getTrendingPost Param ::: ${JSON.stringify(param)}`)
+       return queryRoutes(param);
+    }
+
+    async function getPostsByAsc(param: GetPostParam) {
+        return queryRoutes(param);
+    }
+
+    async function queryRoutes (param: GetPostParam): Promise<IPost[]> {
+
+            log(`=============== queryRoutes Param ::: ${JSON.stringify(param)}`);
+            
+        try {
+            const posts : IPost[] = await Post.find()
+            .populate(param.populate)
+            .limit(param.limit ?? 10)
+            .sort(param.sort)
+                .exec();
+            
+            // Convert each post to a plain object and extract the desired fields
+            // const postCollection: IPost[] = posts.map(post => post.toObject());
+            const postCollection  = posts.map(post => ({
+                _id: post._id,
+                agency: post.agency,
+                origin: post.origin,
+                destination: post.destination,
+                scheduleDate: post.scheduleDate,
+                pricePerTraveler: post.pricePerTraveler,
+                seats: post.seats,
+                createdAt: post.createdAt,
+                midpoints: post.midpoints,
+                commentCounts: post.commentCounts,
+                likeCounts: post.likeCounts,
+                shareCounts: post.shareCounts,
+                comments: post.comments,
+                likes: post.likes,
+                title: post.title,
+                description: post.description,
+                images:post.images
+            }));
+            return postCollection as IPost[];
+        } catch (error) {
+                throw new Error((error as Error).message);    
+        }
+    }
+
 };
 
 // ? : Find Single Post By Post _id
@@ -509,6 +637,95 @@ export const getLikesForPost = async (req: Request, res: Response) => {
         });
     }
 };
+
+
+/// GET Routes
+  /*
+    try {
+        const populateAgency = {
+            path: "agency",
+            select: ['name', 'profile_image', 'user_id'],
+            populate: {
+                path: 'user_id',
+                select:"name email password"
+            }
+        }
+
+        const populateComment = {
+            path: "comments",
+            populate: {
+                path: "user",
+                select:"name email"
+            }
+        };
+
+        const populateLike = {
+            path: "likes",
+            populate: {
+                path: "user",
+                select :"name email"
+            }
+        }
+
+        const populateMidpoints = {
+            path: "midpoints",
+            populate: {
+                path: "city",
+            }
+        }
+
+        const limit = parseInt(req.query.limit as string) || 15;
+        const posts = await Post.find()
+            .populate(populateAgency)
+            .populate('origin')
+            .populate('destination')
+            .populate('seats')
+            .populate(populateMidpoints)
+            // .populate('comments')
+            .populate(populateComment)
+            .populate(populateLike)
+            .limit(limit)
+            .sort({ createdAt: -1 })
+            .exec();
+
+        log(`posts : ${posts}}`)
+
+        const postsJson = posts.map(post => ({
+            _id: post._id,
+            agency: post.agency,
+            origin: post.origin,
+            destination: post.destination,
+            scheduleDate: post.scheduleDate,
+            pricePerTraveler: post.pricePerTraveler,
+            seats: post.seats,
+            createdAt: post.createdAt,
+            midpoints: post.midpoints,
+            commentCounts: post.commentCounts,
+            likeCounts: post.likeCounts,
+            shareCounts: post.shareCounts,
+            comments: post.comments,
+            likes: post.likes,
+            title: post.title,
+            description: post.description,
+            images:post.images
+        }));
+        return res.json({
+            
+            status: 200,
+            message: "success",
+            data:postsJson
+        });
+
+    } catch (error) {
+        log(`Error: ${error}`);
+        return res.status(500).json({
+            error: "error",
+            status: 500,
+            message: `Error ${error}`
+        });
+    }
+    */
+
 
 //// [ changing _id to id for Mobile Json ]
 

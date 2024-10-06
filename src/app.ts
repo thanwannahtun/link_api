@@ -25,11 +25,12 @@ app.use('/api', routes);
 
 // MongoDB connection
 // const mongoURI = "mongodb+srv://thanwanna:449206487!@?mongodbatlas@linkmyanmar.0fvzb.mongodb.net/linkMyanmarDB?retryWrites=true&w=majority&appName=linkMyanmar";
-const mongoURI = "mongodb+srv://linkMyanmarPassword:linkMyanmarPassword@linkmyanmar.0fvzb.mongodb.net/linkMyanmarDB?retryWrites=true&w=majority&appName=linkMyanmar";
+// const mongoURI = "mongodb+srv://linkMyanmarPassword:linkMyanmarPassword@linkmyanmar.0fvzb.mongodb.net/linkMyanmarDB?retryWrites=true&w=majority&appName=linkMyanmar";
 
-// const mongoURI = 'mongodb://localhost:27017/link_myanmar';
+const mongoURI = 'mongodb://localhost:27017/link_myanmar';
 mongoose.connect(mongoURI, {})
     .then(() => console.log('MongoDB connected'))
     .catch((e) => console.log("Error Connecting MongoDB", e));
+
 
 export default app;

@@ -1,13 +1,15 @@
 
 
 import { Router } from 'express';
-import { getPosts, likePost, getPostById, getLikesForPost, insertPostMe } from '../controllers/postController.js';
+import { likePost, getPostById, getLikesForPost, insertPostMe, getPostByCategory } from '../controllers/postController.js';
 import { uploadFormData } from '../middlewares/multer.js';
 
 const router = Router();
 
 // ? : get posts with limit query of default to 15
-router.get('/', getPosts);
+// router.get('/', getPosts);
+
+router.get('/', getPostByCategory);
 
 // ? : create a new post
 // router.post('/', uploadPostImages, insertPost);
