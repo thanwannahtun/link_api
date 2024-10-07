@@ -252,7 +252,8 @@ interface GetPostQuery  {
 type GetPostParam = {
     limit?: number;
     populate: PopulateOptions | (string | PopulateOptions)[];
-    sort: {}
+    sort: {}, 
+    page?: number ,
 }
 
 export const getPosts = async (req: Request, res: Response) => {
@@ -394,7 +395,7 @@ try {
                 posts = [];
             }
     
-    log(`=============== post:::: ${JSON.stringify(posts)}`)
+    log(`===============(( post:::: ${JSON.stringify(posts.at(0)?.origin)}-${JSON.stringify(posts.at(0)?.destination)}::${JSON.stringify(posts.at(-1)?.origin)}-${JSON.stringify(posts.at(-1)?.destination)}`)
             return res.send(
                 {
                     status: 200,
@@ -417,7 +418,7 @@ try {
     }
 
     async function getTrendingPost(param: GetPostParam) {
-        log(`=============== getTrendingPost Param ::: ${JSON.stringify(param)}`)
+        log(`===============(( getTrendingPost Param ::: ${JSON.stringify(param)}`)
        return queryRoutes(param);
     }
 
@@ -427,15 +428,48 @@ try {
 
     async function queryRoutes (param: GetPostParam): Promise<IPost[]> {
 
-            log(`=============== queryRoutes Param ::: ${JSON.stringify(param)}`);
+            log(`===============(( queryRoutes Param ::: ${JSON.stringify(param)}`);
             
+        /// Pagination
+
+        const page: number = parseInt(req.query.page as string, 10) || 1;
+        const limit: number = parseInt(req.query.limit as string, 10) || 10;
+        const skip: number = (page - 1) * limit;
+
+        
         try {
+
+               // Fetch data with pagination
+        const posts = await Post.find()
+        .populate(param.populate)
+        .sort(param.sort)
+        .skip(skip)
+        .limit(limit)
+        .exec();
+        
+        const totalRecords = await Post.countDocuments();
+        const totalPages = Math.ceil(totalRecords / limit);
+        
+            const pagination =  {
+                pagination: {
+                  currentPage: page,
+                //   pageSize: limit,
+                  limit: limit,
+                  totalRecords,
+                  totalPages,
+                },
+              };
+            log(`pagination ::: ${JSON.stringify(pagination.pagination)}`)
+            
+        /// Pagination
+            /*
             const posts : IPost[] = await Post.find()
-            .populate(param.populate)
+                .populate(param.populate)
+                .skip(param.skip ?? 0)
             .limit(param.limit ?? 10)
             .sort(param.sort)
                 .exec();
-            
+            */
             // Convert each post to a plain object and extract the desired fields
             // const postCollection: IPost[] = posts.map(post => post.toObject());
             const postCollection  = posts.map(post => ({
