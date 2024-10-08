@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 
 
-import { Agency, IPost, Like, Post, ILike } from "../models/model.js";
+import { Agency, IPost, Like, Post, ILike, RouteHistory } from "../models/model.js";
 import { log } from "console";
 import fs from 'fs';
 
@@ -252,7 +252,7 @@ interface GetPostQuery  {
 type GetPostParam = {
     limit?: number;
     populate: PopulateOptions | (string | PopulateOptions)[];
-    sort: {}, 
+    sort?: {}, 
     page?: number ,
 }
 
@@ -342,9 +342,18 @@ export const getPosts = async (req: Request, res: Response) => {
     }
 }
 
+interface ROUTE_HISTORY {
+    origin: string,
+    destination: string, 
+}
+
+interface GET_ROUTE_REQUEST_BODY extends ROUTE_HISTORY {}
+
 export const getPostByCategory = async (req: Request, res: Response) => {
 
     const { categoryType  } = req.query as GetPostQuery;
+    const routeHistory = req.body as GET_ROUTE_REQUEST_BODY;
+
     log(`GetPostQuery ::: ${JSON.stringify(req.query)}`)
 
     const populateAgency = {
@@ -381,19 +390,27 @@ export const getPostByCategory = async (req: Request, res: Response) => {
         populateAgency, populateComment , populateLike , populateMidpoints , "origin", "destination"
     ];
 
+    
+    async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
+        if (routeHistory.origin !== null && routeHistory.destination !== null) {
+             new RouteHistory(routeHistory);
+        }
+    }
+
 try {
     let posts: IPost[] = [];
-   
+    const limit: number = parseInt((req.query.limit ?? 10) as string);
             if (categoryType === "sponsored") {
-                posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit : parseInt((req.query.limit ?? 10 ) as string)});
+                posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
             } else if (categoryType === "trending") {
-                posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit : parseInt((req.query.limit ?? 10 ) as string)});
+                posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
             } else if (categoryType === "suggested") {
-                posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit : parseInt((req.query.limit ?? 10 ) as string)});
-            }
-            else {
-                posts = [];
-            }
+                posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
+            } else {
+                posts = await queryRoutes({populate:populateAgency,limit });
+    }
+
+    await insertIntoRouteHistoryCollection(routeHistory);
     
     log(`===============(( post:::: ${JSON.stringify(posts.at(0)?.origin)}-${JSON.stringify(posts.at(0)?.destination)}::${JSON.stringify(posts.at(-1)?.origin)}-${JSON.stringify(posts.at(-1)?.destination)}`)
             return res.send(
@@ -418,7 +435,6 @@ try {
     }
 
     async function getTrendingPost(param: GetPostParam) {
-        log(`===============(( getTrendingPost Param ::: ${JSON.stringify(param)}`)
        return queryRoutes(param);
     }
 
@@ -438,12 +454,11 @@ try {
 
         
         try {
-
-               // Fetch data with pagination
+        // Fetch data with pagination
         const posts = await Post.find()
-        .populate(param.populate)
+        .populate(param.populate ?? "")
         .sort(param.sort)
-        .skip(skip)
+        .skip(skip ?? 0)
         .limit(limit)
         .exec();
         
