@@ -173,6 +173,7 @@ export const Post = mongoose.model<IPost>('Post', PostSchema);
 export interface IRouteHistory extends Document {
     origin: mongoose.Types.ObjectId;
     destination: mongoose.Types.ObjectId;
+    date: Date;
     createdAt: Date;
     // filter: string[];
 }
@@ -180,6 +181,7 @@ export interface IRouteHistory extends Document {
 const RouteHistorySchema: Schema = new Schema<IRouteHistory>({
     origin: { type: Schema.Types.ObjectId, ref: 'City', required: true },
     destination: { type: Schema.Types.ObjectId, ref: 'City', required: true },
+    date: { type: Date },
     createdAt: { type: Date, default: Date.now },
     // filter: [{ type: String, enum: ["VIP", "Business", "High Class", ""] }]
     // filter:"VIP" || "Business" || "Normal" ,

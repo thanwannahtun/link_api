@@ -9,11 +9,13 @@ const router = Router();
 // ? : get posts with limit query of default to 15
 // router.get('/', getPosts);
 
-router.get('/', getPostByCategory);
+// router.get('/', getPostByCategory);
+router.post('/', getPostByCategory);
 
 // ? : create a new post
 // router.post('/', uploadPostImages, insertPost);
-router.post('/', uploadFormData, insertPostMe);
+// router.post('/', uploadFormData, insertPostMe);
+router.post('/uploads/', uploadFormData, insertPostMe);
 
 // ? : Handler to toggle like on a post
 router.post('/:post_id/likes/:user_id', likePost);

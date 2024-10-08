@@ -245,7 +245,7 @@ export const insertPostMe = async (req: Request, res: Response) => {
 }
 
 interface GetPostQuery  {
-    categoryType?: "trending" | "sponsored" | "suggested";
+    categoryType?: "trending" | "sponsored" | "suggested" | "filter_searched_routes";
 }
 
 
@@ -345,6 +345,7 @@ export const getPosts = async (req: Request, res: Response) => {
 interface ROUTE_HISTORY {
     origin: string,
     destination: string, 
+    date: Date,
 }
 
 interface GET_ROUTE_REQUEST_BODY extends ROUTE_HISTORY {}
@@ -390,10 +391,23 @@ export const getPostByCategory = async (req: Request, res: Response) => {
         populateAgency, populateComment , populateLike , populateMidpoints , "origin", "destination"
     ];
 
+    // Constructing the filter object
+    const filter : any = {} ;
+    if (routeHistory.origin ) {
+        filter["origin"] = routeHistory.origin; // Assuming origin is of type ObjectId
+    }
+    if (routeHistory.destination) {
+        filter["destination"] = routeHistory.destination; // Assuming destination is of type ObjectId
+    }
+    if (routeHistory.date) {
+        filter["scheduleDate"] = {$gte:new Date(routeHistory.date)}; // Filtering by date
+    }
+
     
     async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
+        log(`insertIntoRouteHistoryCollection :::: ${routeHistory.origin}-${routeHistory.destination}-${routeHistory.date}`)
         if (routeHistory.origin !== null && routeHistory.destination !== null) {
-             new RouteHistory(routeHistory);
+            RouteHistory.create(routeHistory);
         }
     }
 
@@ -406,13 +420,15 @@ try {
                 posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
             } else if (categoryType === "suggested") {
                 posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
+            } else if (categoryType === "filter_searched_routes") {
+                posts = await filterSearchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
+                await insertIntoRouteHistoryCollection(routeHistory);
+                log(`filterSearchedRoutes ::: ${posts.length}`)
             } else {
                 posts = await queryRoutes({populate:populateAgency,limit });
-    }
+            }
 
-    await insertIntoRouteHistoryCollection(routeHistory);
     
-    log(`===============(( post:::: ${JSON.stringify(posts.at(0)?.origin)}-${JSON.stringify(posts.at(0)?.destination)}::${JSON.stringify(posts.at(-1)?.origin)}-${JSON.stringify(posts.at(-1)?.destination)}`)
             return res.send(
                 {
                     status: 200,
@@ -441,6 +457,13 @@ try {
     async function getPostsByAsc(param: GetPostParam) {
         return queryRoutes(param);
     }
+    async function filterSearchedRoutes(param: GetPostParam) {
+        return queryRoutes(param);
+    }
+
+
+
+    
 
     async function queryRoutes (param: GetPostParam): Promise<IPost[]> {
 
@@ -454,8 +477,9 @@ try {
 
         
         try {
+            log(`Filter :::: ${JSON.stringify(filter)}`)
         // Fetch data with pagination
-        const posts = await Post.find()
+        const posts = await Post.find(filter)
         .populate(param.populate ?? "")
         .sort(param.sort)
         .skip(skip ?? 0)
