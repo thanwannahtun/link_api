@@ -1,12 +1,13 @@
 
 
 import { Router } from 'express';
-import { getAllAgencies, getAgencyWithUserId, getPostByAgencyId } from '../controllers/agencyController.js';
+import { getAgencyWithUserId, getPostByAgencyId, getAgencyByQuery } from '../controllers/agencyController.js';
 
 const router = Router();
 
-// ? : Get All Agencies ( optional limit query )
-router.get('/', getAllAgencies);
+
+// ? : url?agency_id=123
+router.post('/', getAgencyByQuery);
 
 // ? : Find Agency With User Id
 router.get('/:user_id', getAgencyWithUserId);

@@ -1,33 +1,76 @@
 import { Response, Request } from "express";
 import { log } from "console";
 import { Agency, IAgency, Post } from "../models/model.js";
+import { GetPostParam } from "./postController.js";
 
+interface GetAgencyQuery { agency_id?: string, limit?: number, sort?: {} }
+/// const limit: number = parseInt((req.query.limit ?? 10) as string);
 
-// ? : Get All Agencies ( optional limit query )
-export const getAllAgencies = async (req: Request, res: Response) => {
+interface GetAgencyParam extends GetPostParam, GetAgencyQuery { }
+export const getAgencyByQuery = async (req: Request, res: Response) => {
+    const { agency_id, limit, sort } = req.query as GetAgencyQuery;
+    log(`Request Query::: ${JSON.stringify(req.query)}`);
 
-    const { limit } = req.query;
+    const populateUser = {
+        path: "user_id",
+        select: "name email password",
+    }
 
     try {
-
-        const agencies = await Agency.find().limit(limit ? Number(limit) : 20);
-        log(`Agencies : ${agencies}`)
-        return res.status(200).json({
-            message: "success",
+        let agencies: IAgency[] = [];
+        if (agency_id !== null) {
+            // ? : url?agency_id=123
+            agencies = await getAgencyId({ agency_id, populate: populateUser });
+        } else {
+            // ? : url?limit=n&?sort=%7B%22createdAt%22%3A-1%7D&limit=6 ... etc
+            agencies = await getAllAgencies({ populate: populateUser, limit, sort: sort });
+        }
+        return res.send({
+            status: 200,
             data: agencies,
-            status: 200
-        })
+            message: `success`
+        });
 
     } catch (error) {
-        log(`Error : ${error}`);
-        return res.status(500).send({
+
+        res.status(500).send({
             error: "error",
             status: 500,
-            message: `Error ${error}`
+            message: `Internal Server Error!`
         });
     }
 
+    async function getAllAgencies(param: GetAgencyParam): Promise<IAgency[]> {
+        return getByParam(param);
+    }
+
+    async function getAgencyId(param: GetAgencyParam): Promise<IAgency[]> {
+        return getByParam(param);
+    }
+
+    async function getByParam(param: GetAgencyParam): Promise<IAgency[]> {
+        const page: number = parseInt(req.query.page as string, 10) || 1;
+        const limit: number = parseInt(req.query.limit as string, 10) || 10;
+        const skip: number = (page - 1) * limit;
+
+        if (param.agency_id != null) {
+            const agency = await Agency.findById(param.agency_id).populate(populateUser);
+            if (agency?.id === null) {
+                throw Error(`Agency not Found!`);
+            }
+            return [agency] as IAgency[];
+        } else {
+            const agencies = await Agency.find({/* filter here */ })
+                .populate(param.populate ?? "")
+                .sort(param.sort)
+                .skip(skip ?? 0)
+                .limit(limit)
+                .exec();
+            return agencies as IAgency[];
+        }
+    }
 }
+
 
 // ? : Find Agency With User Id
 export const getAgencyWithUserId = async (req: Request, res: Response) => {

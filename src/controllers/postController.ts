@@ -249,7 +249,7 @@ interface GetPostQuery  {
 }
 
 
-type GetPostParam = {
+ export interface GetPostParam {
     limit?: number;
     populate: PopulateOptions | (string | PopulateOptions)[];
     sort?: {}, 
@@ -425,7 +425,7 @@ try {
                 await insertIntoRouteHistoryCollection(routeHistory);
                 log(`filterSearchedRoutes ::: ${posts.length}`)
             } else {
-                posts = await queryRoutes({populate:populateAgency,limit });
+                posts = await queryRoutes({populate:populateArray,limit });
             }
 
     
