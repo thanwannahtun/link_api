@@ -246,6 +246,8 @@ export const insertPostMe = async (req: Request, res: Response) => {
 
 interface GetPostQuery  {
     categoryType?: "trending" | "sponsored" | "suggested" | "filter_searched_routes";
+    agency_id?: string,
+    limit?: number,
 }
 
 
@@ -352,7 +354,7 @@ interface GET_ROUTE_REQUEST_BODY extends ROUTE_HISTORY {}
 
 export const getPostByCategory = async (req: Request, res: Response) => {
 
-    const { categoryType  } = req.query as GetPostQuery;
+    const { categoryType, agency_id , limit } = req.query as GetPostQuery;
     const routeHistory = req.body as GET_ROUTE_REQUEST_BODY;
 
     log(`GetPostQuery ::: ${JSON.stringify(req.query)}`)
@@ -402,6 +404,10 @@ export const getPostByCategory = async (req: Request, res: Response) => {
     if (routeHistory.date) {
         filter["scheduleDate"] = {$gte:new Date(routeHistory.date)}; // Filtering by date
     }
+    /// Filter Posts by AgencyId 
+    if (agency_id) {
+        filter["agency"] = agency_id; // Assuming destination is of type ObjectId
+    }
 
     
     async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
@@ -413,7 +419,7 @@ export const getPostByCategory = async (req: Request, res: Response) => {
 
 try {
     let posts: IPost[] = [];
-    const limit: number = parseInt((req.query.limit ?? 10) as string);
+    // const limit: number = parseInt((req.query.limit ?? 10) as string);
             if (categoryType === "sponsored") {
                 posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
             } else if (categoryType === "trending") {
@@ -427,6 +433,7 @@ try {
             } else {
                 posts = await queryRoutes({populate:populateArray,limit });
             }
+            
 
     
             return res.send(
