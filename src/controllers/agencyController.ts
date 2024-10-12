@@ -18,10 +18,12 @@ export const getAgencyByQuery = async (req: Request, res: Response) => {
 
     try {
         let agencies: IAgency[] = [];
-        if (agency_id !== null) {
+        if (agency_id) {
             // ? : url?agency_id=123
             agencies = await getAgencyId({ agency_id, populate: populateUser });
         } else {
+            log("HEllo");
+
             // ? : url?limit=n&?sort=%7B%22createdAt%22%3A-1%7D&limit=6 ... etc
             agencies = await getAllAgencies({ populate: populateUser, limit, sort: sort });
         }
@@ -49,24 +51,32 @@ export const getAgencyByQuery = async (req: Request, res: Response) => {
     }
 
     async function getByParam(param: GetAgencyParam): Promise<IAgency[]> {
+        log(`getByParam ::: ${JSON.stringify(param)}`)
         const page: number = parseInt(req.query.page as string, 10) || 1;
         const limit: number = parseInt(req.query.limit as string, 10) || 10;
         const skip: number = (page - 1) * limit;
+        try {
+            if (param.agency_id) {
+                log("Agencyl");
 
-        if (param.agency_id != null) {
-            const agency = await Agency.findById(param.agency_id).populate(populateUser);
-            if (agency?.id === null) {
-                throw Error(`Agency not Found!`);
+                const agency = await Agency.findById(param.agency_id).populate(populateUser);
+                if (agency?.id === null) {
+                    throw Error(`Agency not Found!`);
+                }
+                return [agency] as IAgency[];
+            } else {
+                log("HEllo");
+
+                const agencies = await Agency.find({/* filter here */ })
+                    .populate(param.populate ?? "")
+                    .sort(param.sort)
+                    .skip(skip ?? 0)
+                    .limit(limit)
+                    .exec();
+                return agencies as IAgency[];
             }
-            return [agency] as IAgency[];
-        } else {
-            const agencies = await Agency.find({/* filter here */ })
-                .populate(param.populate ?? "")
-                .sort(param.sort)
-                .skip(skip ?? 0)
-                .limit(limit)
-                .exec();
-            return agencies as IAgency[];
+        } catch (error) {
+            throw new Error((error as Error).message);
         }
     }
 }

@@ -26,8 +26,8 @@ app.use('/uploads', express.static(path.join(__dirname, './uploads')));
 // Routes
 app.use('/api', routes);
 
-const mongoURI = process.env.DATABASE_ATLAS_URL as string;
-// const mongoURI = process.env.DATABASE_URL as string;
+// const mongoURI = process.env.DATABASE_ATLAS_URL as string;
+const mongoURI = process.env.DATABASE_URL as string;
 
 mongoose.connect(mongoURI, {})
     .then(() => console.log('MongoDB connected'))
