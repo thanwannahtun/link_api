@@ -296,12 +296,13 @@ interface GetPostQuery  {
     categoryType?: "trending" | "sponsored" | "suggested" | "filter_searched_routes";
     agency_id?: string,
     limit?: number,
+    page?:number,
 }
  export interface GetPostParam {
     limit?: number;
     populate: PopulateOptions | (string | PopulateOptions)[];
     sort?: {}, 
-    page?: number ,
+    page?: number,
 }
 
 // <uploadPost >
@@ -312,30 +313,21 @@ export const uploadNewPost = async (req: Request, res: Response) => {
 
     try {
 
-        const routeIds: Types.ObjectId[] = [];
-        
-        try {
-            for (const route of routes) {
-                const savedRoute = new Route(route);
-                await savedRoute.save();
-                routeIds.push(savedRoute.id);
-            }
-        } catch (error) {
-                throw Error(`ERROR -> ${error}`);
-        }
-        
-        log(`routeIds :: ${routeIds.length}`)
-
         const post: IPost = new Post({ title, description, agency });
         try {
-        // const images = (req.files as Express.Multer.File[]).map(file => `/uploads/${path.basename(file.path)}`);
-        //     post.images = images; // add images paths
-    
+
+            const routeIds: Types.ObjectId[] = [];
+                for (const route of routes) {
+                    const savedRoute = new Route({...route, post:post.id});
+                    await savedRoute.save();
+                    routeIds.push(savedRoute.id);
+                }
+        log(`routeIds :: ${routeIds.length}`);
             // Add image paths to the post
-            if (req.files) {
-                const images = (req.files as Express.Multer.File[]).map(file => `/uploads/${path.basename(file.path)}`);
-                post.images = images;
-            }
+        if (req.files) {
+            const images = (req.files as Express.Multer.File[]).map(file => `/uploads/${path.basename(file.path)}`);
+            post.images = images;
+        }
         post.routes = routeIds; // add post routes ids
         const savedpost = await post.save();
         if (!savedpost.id) {
@@ -362,7 +354,7 @@ export const uploadNewPost = async (req: Request, res: Response) => {
 // </getPost>
 export const getPostRoutesByCategory = async (req: Request, res: Response) => {
 
-    const { categoryType, agency_id , limit } = req.query as GetPostQuery;
+    const { categoryType, agency_id , limit , page } = req.query as GetPostQuery;
     const routeHistory = req.body as GET_ROUTE_REQUEST_BODY;
 
     log(`GetPostQuery ::: ${JSON.stringify(req.query)}`)
@@ -382,32 +374,26 @@ export const getPostRoutesByCategory = async (req: Request, res: Response) => {
     if (agency_id) {
         filter["agency"] = agency_id; // Assuming destination is of type ObjectId
     }
-    /// Filter
-    async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
-        log(`insertIntoRouteHistoryCollection :::: ${routeHistory.origin}-${routeHistory.destination}-${routeHistory.date}`)
-        if (routeHistory.origin !== null && routeHistory.destination !== null) {
-            RouteHistory.create(routeHistory);
-        }
-    }
-    // const posts: IPost[] = await Post.find().populate([ populateAgency, populateRoute ]);
+   
 try {
     let posts: IPost[] = [];
     // const limit: number = parseInt((req.query.limit ?? 10) as string);
     if (categoryType === "sponsored") {
-    // const posts: IPost[] = await Post.find().populate([ populateAgency, populateRoute ]);
-                
                 posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
-            } else if (categoryType === "trending") {
+    } else if (categoryType === "trending") {
                 posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
-            } else if (categoryType === "suggested") {
+    } else if (categoryType === "suggested") {
                 posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
-            } else if (categoryType === "filter_searched_routes") {
-                posts = await searchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
-                await insertIntoRouteHistoryCollection(routeHistory);
-                log(`filterSearchedRoutes ::: ${posts.length}`)
-            } else {
-                posts = await queryRoutes({populate:populateArray,limit });
-            }
+    } else if (categoryType === "filter_searched_routes") {
+        const postsIds = await searchRoutes( routeHistory ,filter );
+        await insertIntoRouteHistoryCollection(routeHistory);
+        posts = await findPostsByIds(postsIds, {populate:populateRoute , limit , sort : {} , page : parseInt(`${page}`)});
+                // posts = await searchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
+                // await insertIntoRouteHistoryCollection(routeHistory);
+                // log(`filterSearchedRoutes ::: ${posts.length}`)
+    } else {
+        posts = await queryRoutes({populate:populateArray,limit });
+    }
             return res.send(
                 {
                     status: 200,
@@ -434,7 +420,7 @@ try {
      async function getPostsByAsc(param: GetPostParam) {
          return queryRoutes(param);
      }
-     async function searchedRoutes(param: GetPostParam) {
+    async function searchedRoutes(param: GetPostParam) {
          return queryRoutes(param);
      }
  
@@ -444,6 +430,7 @@ try {
          const page: number = parseInt(req.query.page as string, 10) || 1;
          const limit: number = parseInt(req.query.limit as string, 10) || 10;
          const skip: number = (page - 1) * limit;
+
          /// Pagination
         try {
              log(`Filter :::: ${JSON.stringify(filter)}`)
@@ -455,16 +442,11 @@ try {
          .limit(limit)
          .exec();
          
+  
          const totalRecords = await Post.countDocuments();
          const totalPages = Math.ceil(totalRecords / limit);
-         
-             const pagination =  {
-                   currentPage: page,
-                 //pageSize: limit,
-                   limit: limit,
-                   totalRecords,
-                   totalPages,
-               };
+         const pagination =  {currentPage: page, limit: limit, totalRecords,totalPages,};
+      log(`pagination ::: ${JSON.stringify(pagination)}`)
              log(`pagination ::: ${JSON.stringify(pagination)}`)
              return posts as IPost[] ;
             } catch (error) {
@@ -474,40 +456,73 @@ try {
 }
 // </getPost>
 
-export const searchRoutes = async (req: Request, res: Response) => {
+async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
+    log(`
+        insertIntoRouteHistoryCollection :::: ${routeHistory.origin}-${routeHistory.destination}-${routeHistory.date}
+        `)
+    if (routeHistory.origin !== null && routeHistory.destination !== null) {
+        RouteHistory.create(routeHistory);
+    }
+}
 
-    const routeHistory = req.body as GET_ROUTE_REQUEST_BODY;
-
-    const filter : any = {} ;
-    if (routeHistory.origin ) {
-        filter["origin"] = routeHistory.origin; // Assuming origin is of type ObjectId
+const searchRoutes = async (param : GET_ROUTE_REQUEST_BODY , filter : {}) : Promise<Types.ObjectId[]> => {
+    log(`
+        searchRoutes :::: )=> param : ${JSON.stringify(param)} , filter : ${JSON.stringify(filter)}
+        `);
+    if (!param) {
+        log(`
+        Param missing ${param}
+        `)
     }
-    if (routeHistory.destination) {
-        filter["destination"] = routeHistory.destination; // Assuming destination is of type ObjectId
-    }
-    if (routeHistory.date) {
-        filter["scheduleDate"] = {$gte:new Date(routeHistory.date)}; // Filtering by date
-    }
-    /// Filter
-    async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
-        log(`insertIntoRouteHistoryCollection :::: ${routeHistory.origin}-${routeHistory.destination}-${routeHistory.date}`)
-        if (routeHistory.origin !== null && routeHistory.destination !== null) {
-            RouteHistory.create(routeHistory);
-        }
-    }
-    const routeIds: Types.ObjectId[] = [];
-
     try {
-        const routes = await Route.find(filter).populate([populateRoute]);
+        const routes = await Route.find(filter);
         const postIds: Types.ObjectId[] = [];
         for (const route of routes) {
             postIds.push(route.post)
         }
         return postIds;
     } catch (error) {
-        
+        throw Error(`Error getting posts ids of searched routes => ${error}`)
     }
 }
+
+const findPostsByIds = async (postIds: Types.ObjectId[], param: GetPostParam): Promise<IPost[]> => {
+     /// Pagination
+     const page: number = param.page || 10;
+     const limit: number = param.limit || 10;
+    const skip: number = (page - 1) * limit; 
+
+    
+    const totalRecords = await Post.countDocuments();
+    const totalPages = Math.ceil(totalRecords / limit);
+    const pagination =  {currentPage: page, limit: limit, totalRecords,totalPages,};
+    log(` 
+        pagination ::: ${JSON.stringify(pagination)}
+        `)
+    
+    log(`
+        findPostsByIds :::>> param : ${JSON.stringify(param)} , postIds length : ${postIds.length}
+        `)
+     /// Pagination
+    try {
+        // Ensure postIds array is not empty
+        if (postIds.length < 0) {
+            // throw new Error("No postIds provided");
+            return [] as IPost[];
+        }
+        // Find posts whose _id matches any of the ids in the postIds array
+        const posts = await Post.find({ _id: { $in: postIds } })
+        .populate(param.populate ?? "")
+        .sort(param.sort)
+        .skip(skip ?? 0)
+        .limit(limit)
+        .exec();
+        return posts as IPost[];
+    } catch (error) {
+        throw Error(`Error finding posts by ids => ${error}`);
+    }
+};
+
 
 /*
 export const getPosts = async (req: Request, res: Response) => {
