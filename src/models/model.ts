@@ -81,7 +81,7 @@ export interface IMidPoint extends Document {
     arrivalTime: Date;
     departureTime: Date;
     description: string,
-    order: number
+    price: number
 }
 
 const MidPointSchema: Schema = new Schema<IMidPoint>({
@@ -89,7 +89,7 @@ const MidPointSchema: Schema = new Schema<IMidPoint>({
     arrivalTime: { type: Date },
     departureTime: { type: Date },
     description: { type: String },
-    order: { type: Number }
+    price: { type: Number }
 });
 
 export const MidPoint = mongoose.model<IMidPoint>('MidPoint', MidPointSchema);
@@ -126,17 +126,39 @@ const LikeSchema: Schema = new Schema<ILike>({
 
 export const Like = mongoose.model<ILike>('Like', LikeSchema);
 
-
-
-export interface IPost extends Document {
+export interface IRoute extends Document {
     agency: mongoose.Types.ObjectId;
+    post: mongoose.Types.ObjectId;
     origin: mongoose.Types.ObjectId;
     destination: mongoose.Types.ObjectId;
     scheduleDate: Date;
-    pricePerTraveler: number;
-    seats: mongoose.Types.ObjectId[];
-    // midpoints: mongoose.Types.ObjectId[];
+    pricePerTraveller: number;
     midpoints: IMidPoint[];
+    image: string;
+    createdAt: Date;
+    seats: mongoose.Types.ObjectId[];
+}
+
+const RouteSchma: Schema = new Schema<IRoute>({
+    agency: { type: Schema.Types.ObjectId, ref: 'Agency', required: true },
+    post: { type: Schema.Types.ObjectId, ref: 'Post', required: true },
+    origin: { type: Schema.Types.ObjectId, ref: 'City', required: true },
+    destination: { type: Schema.Types.ObjectId, ref: 'City', required: true },
+    scheduleDate: { type: Date, required: true },
+    pricePerTraveller: { type: Number, required: true },
+    midpoints: [MidPointSchema],
+    createdAt: { type: Date, default: Date.now },
+    seats: [SeatSchema],
+});
+
+export const Route = mongoose.model<IRoute>('Route', RouteSchma);
+
+
+// midpoints: mongoose.Types.ObjectId[];
+// midpoints: IMidPoint[];
+
+export interface IPost extends Document {
+    agency: mongoose.Types.ObjectId;
     commentCounts: number;
     likeCounts: number;
     shareCounts: number;
@@ -146,17 +168,13 @@ export interface IPost extends Document {
     description: string;
     createdAt: Date;
     images: string[]; // Add this line for images
+    /// For [Route]
+    routes: mongoose.Types.ObjectId[],
 }
 
+// seats: [{ type: Schema.Types.ObjectId, ref: 'Seat' }],
 const PostSchema: Schema = new Schema<IPost>({
     agency: { type: Schema.Types.ObjectId, ref: 'Agency', required: true },
-    origin: { type: Schema.Types.ObjectId, ref: 'City', required: true },
-    destination: { type: Schema.Types.ObjectId, ref: 'City', required: true },
-    scheduleDate: { type: Date, required: true },
-    pricePerTraveler: { type: Number, required: true },
-    // seats: [{ type: Schema.Types.ObjectId, ref: 'Seat' }],
-    seats: [SeatSchema],
-    midpoints: [MidPointSchema],
     commentCounts: { type: Number, default: 0 },
     likeCounts: { type: Number, default: 0 },
     shareCounts: { type: Number, default: 0 },
@@ -165,7 +183,9 @@ const PostSchema: Schema = new Schema<IPost>({
     title: { type: String, required: true },
     description: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
-    images: [{ type: String }] // Add this line
+    images: [{ type: String }], // Add this line
+    /// For [Route]
+    routes: [{ type: Schema.Types.ObjectId, ref: 'Route' }]
 });
 
 export const Post = mongoose.model<IPost>('Post', PostSchema);
