@@ -6,10 +6,19 @@ import { log } from "console";
 
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { PopulateOptions, Types } from "mongoose";
+import mongoose, { PopulateOptions, Types } from "mongoose";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+export interface AggregatedRoute {
+    _id: {
+        origin: mongoose.Types.ObjectId;
+        destination: mongoose.Types.ObjectId;
+        date: Date;
+    };
+    count: number; // the number of searches for this route
+}
 
 // <Populate>
 
@@ -381,13 +390,30 @@ try {
     if (categoryType === "sponsored") {
                 posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
     } else if (categoryType === "trending") {
-                posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
+        const aggregatedRoutes :AggregatedRoute[] = await getTrendingRoutes();
+        log(`aggregatedRoutes => ${JSON.stringify(aggregatedRoutes)}`)
+        // const routes = await findRoutesByTrendingData(aggregatedRoutes);
+        // log(`routes ::: ${JSON.stringify(routes)}`)
+        // const routes = await findRoutesByTrendingData(aggregatedRoutes);
+        // const routeIds = await findRouteIdsByTrendingData(aggregatedRoutes);
+        // log(`routeIds length ::: ${routeIds.length}`)
+        // posts = await findPostsByRouteIds(routeIds, populateRoute);
+        // log(`routes => ${JSON.stringify(routes)}`)
+
+        posts = await findPostsByTrendingRoutes(aggregatedRoutes, { populate: [populateAgency, populateRoute], limit, page , sort:{"createdAt":-1} });
+        log(`posts length => ${posts.length}`)
+        
+        return res.send({
+            message: "success",
+            data:posts,
+        });
+                // posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
     } else if (categoryType === "suggested") {
                 posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
     } else if (categoryType === "filter_searched_routes") {
-        const postsIds = await searchRoutes( routeHistory ,filter );
+        const postsIds = await searchRoutes( filter );
         await insertIntoRouteHistoryCollection(routeHistory);
-        posts = await findPostsByIds(postsIds, {populate:populateRoute , limit , sort : {} , page : parseInt(`${page}`)});
+        posts = await findPostsByPostIds(postsIds, {populate:populateRoute , limit , sort : {} , page : parseInt(`${page}`)});
                 // posts = await searchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
                 // await insertIntoRouteHistoryCollection(routeHistory);
                 // log(`filterSearchedRoutes ::: ${posts.length}`)
@@ -456,6 +482,28 @@ try {
 }
 // </getPost>
 
+const findPostsByTrendingRoutes = async (
+    trendingRoutes: AggregatedRoute[],
+    param: GetPostParam
+): Promise<IPost[]> => {
+    try {
+        // Step 1: Get routeIds from trending routes
+        const routeIds: Types.ObjectId[] = await findRouteIdsByTrendingData(trendingRoutes);
+        // Step 2: Use routeIds to find the corresponding postIds
+        const routes = await Route.find({ _id: { $in: routeIds } }).select('post').lean();
+        const postIds: Types.ObjectId[] = routes.map(route => route.post);
+        log(`findPostsByTrendingRoutes (postIds) => ${postIds.length}`)
+        // Step 3: Use postIds to find the posts
+        const posts = await findPostsByPostIds(postIds, param);
+        log(`findPostsByTrendingRoutes (posts) => ${JSON.stringify(posts.at(0))}`)
+
+        return posts;
+    } catch (error) {
+        throw new Error(`Error finding posts by trending routes ( findPostsByTrendingRoutes ): ${error}`);
+    }
+};
+
+
 async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
     log(`
         insertIntoRouteHistoryCollection :::: ${routeHistory.origin}-${routeHistory.destination}-${routeHistory.date}
@@ -465,15 +513,100 @@ async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
     }
 }
 
-const searchRoutes = async (param : GET_ROUTE_REQUEST_BODY , filter : {}) : Promise<Types.ObjectId[]> => {
-    log(`
-        searchRoutes :::: )=> param : ${JSON.stringify(param)} , filter : ${JSON.stringify(filter)}
-        `);
-    if (!param) {
-        log(`
-        Param missing ${param}
-        `)
+/// TrendingRoutes
+
+// Function to get trending routes based on search history
+const getTrendingRoutes = async (): Promise<AggregatedRoute[]> => {
+    try {
+        // Aggregate trending routes by origin, destination, and date
+        const trendingRoutes: AggregatedRoute[] = await RouteHistory.aggregate([
+            {
+                $group: {
+                    _id: {
+                        origin: "$origin",
+                        destination: "$destination",
+                        // date: "$date"
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { count: -1 } } // Sort by highest search count
+            ,
+            { 
+                $limit: 10 // Limit to top 10 trending routes
+            }
+        ]);
+
+        return trendingRoutes;
+    } catch (error) {
+        throw new Error(`Error finding trending routes: ${error}`);
     }
+};
+
+// Function to find routes based on trending route info
+const findRouteIdsByTrendingData = async (
+    trendingRoutes: AggregatedRoute[]
+): Promise<Types.ObjectId[]> => {
+    try {
+
+           // Sort by count descending (most popular routes first)
+           const sortedRoutes = trendingRoutes.sort((a, b) => b.count - a.count);
+        // Extract origin, destination, and date from the trending data
+        const routeFilters = sortedRoutes.map(route => ({
+            origin: route._id.origin,
+            destination: route._id.destination,
+            // scheduleDate: route._id.date
+        }));
+
+        // Find all matching route IDs
+        const matchingRoutes = await Route.find({
+            $or: routeFilters
+        }).select('_id').lean(); // Select only '_id' and return as plain JS objects
+        log(`findRouteIdsByTrendingData (matchingRoutes) => ${JSON.stringify(matchingRoutes)}`)
+
+        // Extract and return the route IDs
+        const routeIds: Types.ObjectId[] = matchingRoutes.map(route => route._id as Types.ObjectId);
+        log(`findRouteIdsByTrendingData (routeIds) => ${routeIds.length}`)
+        return routeIds;
+    } catch (error) {
+        throw new Error(`Error finding routes by trending data: ${error}`);
+    }
+};
+
+const findRoutesByTrendingData = async (
+    trendingRoutes: AggregatedRoute[]
+): Promise<IRoute[]> => {
+    try {
+        // Extract origin, destination, and date from the trending data
+        const routeFilters = trendingRoutes.map(route => ({
+            origin: route._id.origin,
+            destination: route._id.destination,
+            scheduleDate: route._id.date
+        }));
+
+        // Find all matching routes in the Route collection
+      const matchingRoutes: IRoute[] = await Route.find({
+        $or: routeFilters
+    }).populate('agency origin destination midpoints').lean();
+
+        return matchingRoutes;
+    } catch (error) {
+        throw new Error(`Error finding routes by trending data: ${error}`);
+    }
+};
+
+/// TrendingRoutes
+
+const searchRoutes = async (filter: {}): Promise<Types.ObjectId[]> => {
+    //param : GET_ROUTE_REQUEST_BODY 
+    // log(`
+    //     searchRoutes :::: )=> param : ${JSON.stringify(param)} , filter : ${JSON.stringify(filter)}
+    //     `);
+    // if (!param) {
+    //     log(`
+    //     Param missing ${param}
+    //     `)
+    // }
     try {
         const routes = await Route.find(filter);
         const postIds: Types.ObjectId[] = [];
@@ -486,38 +619,49 @@ const searchRoutes = async (param : GET_ROUTE_REQUEST_BODY , filter : {}) : Prom
     }
 }
 
-const findPostsByIds = async (postIds: Types.ObjectId[], param: GetPostParam): Promise<IPost[]> => {
+const findPostsByRouteIds = async (routeIds: Types.ObjectId[], param: GetPostParam): Promise<IPost[]> => {
+
+    let posts: IPost[] = [];
+
+    try {
+        posts = await Post.find({ _id: { $in: routeIds } }).populate(param.populate ?? "")
+        return posts;
+    } catch (error) {
+        throw Error(`Error finding posts by route_ids => ${error}`);
+    }
+}
+const findPostsByPostIds = async (postIds: Types.ObjectId[], param: GetPostParam): Promise<IPost[]> => {
      /// Pagination
-     const page: number = param.page || 10;
+    const page: number = param.page || 1;  // Default to page 1, not 10
      const limit: number = param.limit || 10;
     const skip: number = (page - 1) * limit; 
 
     
-    const totalRecords = await Post.countDocuments();
+    const totalRecords = await Post.countDocuments(); // Count only matching posts
     const totalPages = Math.ceil(totalRecords / limit);
     const pagination =  {currentPage: page, limit: limit, totalRecords,totalPages,};
-    log(` 
-        pagination ::: ${JSON.stringify(pagination)}
-        `)
+    log(`pagination ::: ${JSON.stringify(pagination)}`)
     
-    log(`
-        findPostsByIds :::>> param : ${JSON.stringify(param)} , postIds length : ${postIds.length}
-        `)
+    log(`findPostsByIds :::>> param : ${JSON.stringify(param)} , postIds length : ${postIds.length}`)
      /// Pagination
     try {
         // Ensure postIds array is not empty
-        if (postIds.length < 0) {
-            // throw new Error("No postIds provided");
-            return [] as IPost[];
-        }
+           // Ensure postIds array is not empty
+    if (postIds.length === 0) {
+        log(`No postIds provided, returning empty array`);
+        return [] as IPost[];
+    }
+
         // Find posts whose _id matches any of the ids in the postIds array
         const posts = await Post.find({ _id: { $in: postIds } })
         .populate(param.populate ?? "")
         .sort(param.sort)
         .skip(skip ?? 0)
         .limit(limit)
-        .exec();
+            .exec();
+        // Sort each post's routes by `pricePerTraveller`     
         return posts as IPost[];
+        
     } catch (error) {
         throw Error(`Error finding posts by ids => ${error}`);
     }
