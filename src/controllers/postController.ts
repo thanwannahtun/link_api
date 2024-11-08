@@ -1,7 +1,7 @@
-import { IRoute, Request, Response } from "express";
+import { Request, Response } from "express";
 
 
-import { IPost, Like, Post, ILike, RouteHistory, Route } from "../models/model.js";
+import { IPost, Like, Post, ILike, RouteHistory, Route, IRoute } from "../models/model.js";
 import { log } from "console";
 
 import path, { dirname } from 'path';
@@ -302,16 +302,18 @@ export const insertPostMe = async (req: Request, res: Response) => {
 }
 */
 interface GetPostQuery  {
-    categoryType?: "trending" | "sponsored" | "suggested" | "filter_searched_routes";
+    categoryType?: "trending" | "sponsored" | "suggested" | "filter_searched_routes" | "trending_routes" | "post_with_routes";
     agency_id?: string,
     limit?: number,
-    page?:number,
+    page?: number,
+    post_id?:string
 }
  export interface GetPostParam {
     limit?: number;
     populate: PopulateOptions | (string | PopulateOptions)[];
     sort?: {}, 
-    page?: number,
+     page?: number,
+     filter?:{}
 }
 
 // <uploadPost >
@@ -319,39 +321,55 @@ export const uploadNewPost = async (req: Request, res: Response) => {
     const { agency, title, description } = req.body as IPost;
     
     const { routes }: { routes: IRoute[] } = req.body;
-
     try {
 
         const post: IPost = new Post({ title, description, agency });
         try {
 
+            if (req.files) {
+                // const files = (req.files as Express.Multer.File[]).map(file => `/uploads/${path.basename(file.path)}`);
+                const files = (req.files as Express.Multer.File[]);
+                let fileIndex = 0;
+                
+                routes.forEach((route) => {
+                    if (fileIndex < files.length && files[fileIndex]) {
+                        route.image = `/uploads/${path.basename(files[fileIndex].path)}`;
+                        fileIndex++;
+                    } else {
+                        route.image = null;
+                    }
+                })
+                
+                // post.images = images;
+            }
+
             const routeIds: Types.ObjectId[] = [];
                 for (const route of routes) {
                     const savedRoute = new Route({...route, post:post.id});
                     await savedRoute.save();
-                    routeIds.push(savedRoute.id);
+                    log(savedRoute.toJSON());
+                    routeIds.push(savedRoute._id as Types.ObjectId);
                 }
         log(`routeIds :: ${routeIds.length}`);
             // Add image paths to the post
-        if (req.files) {
-            const images = (req.files as Express.Multer.File[]).map(file => `/uploads/${path.basename(file.path)}`);
-            post.images = images;
-        }
+       
         post.routes = routeIds; // add post routes ids
         const savedpost = await post.save();
-        if (!savedpost.id) {
+        if (!savedpost._id) {
             /// throw Error
             throw Error(`Post did not save ! ${savedpost.id}`)
             }
+            log(post.toJSON());
+            
+            res.send({
+                message: "success",
+                data:post
+            })
             
         } catch (error) {
             throw Error(`eRRor :: ${error}`)
         }
-
-        res.send({
-            message: "success",
-            data:post
-        })
+       
     } catch (error) {
         return  res.status(500).json({
             error:"error",
@@ -363,7 +381,7 @@ export const uploadNewPost = async (req: Request, res: Response) => {
 // </getPost>
 export const getPostRoutesByCategory = async (req: Request, res: Response) => {
 
-    const { categoryType, agency_id , limit , page } = req.query as GetPostQuery;
+    const { categoryType, agency_id , limit , page , post_id } = req.query as GetPostQuery;
     const routeHistory = req.body as GET_ROUTE_REQUEST_BODY;
 
     log(`GetPostQuery ::: ${JSON.stringify(req.query)}`)
@@ -387,7 +405,41 @@ export const getPostRoutesByCategory = async (req: Request, res: Response) => {
 try {
     let posts: IPost[] = [];
     // const limit: number = parseInt((req.query.limit ?? 10) as string);
+    if (categoryType === "post_with_routes") {
+        /// assign [post_id] for only one post for post detail endpoint
+        const postId = post_id; 
+        if (postId) {
+            /// get post by post id for post detail endpoint
+            const postById = await Post.findById(postId).populate([populateAgency, populateRoute]).exec()        
+            posts.push(postById as IPost);
+            log(`post_with_routes postById :::: ${posts.length}`)
+        } else {
+            /// get posts endpoint
+            posts = await Post.find({})
+            .populate([populateAgency,populateRoute])
+            .sort({}).
+                // .skip(skip ?? 0).limit(limit).
+                exec();
+            // get post by id and then populate by route ids
+            log(`post_with_routes posts :::: ${posts.length}`)
+        }
+     
+        return res.send({
+            data: posts,
+            message: "success",
+            status: 200
+        })
+    } else if (categoryType === "trending_routes") {
+    const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter: {}, limit, });
+        return res.send({
+            data: routes,
+            message: "success",
+            status: 200
+        })
+    } else
+       
     if (categoryType === "sponsored") {
+        // posts = await getSponsoredPosts();
                 posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
     } else if (categoryType === "trending") {
         const aggregatedRoutes :AggregatedRoute[] = await getTrendingRoutes();
@@ -411,12 +463,26 @@ try {
     } else if (categoryType === "suggested") {
                 posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
     } else if (categoryType === "filter_searched_routes") {
-        const postsIds = await searchRoutes( filter );
+        try {
+        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({
+            populate: [populateAgency, "origin", "destination", populateMidpoints], filter, limit, });
+        // const postsIds = await searchRoutes( filter );
+        log(`filter_searched_routes routes :length: ${routes.length}`)
         await insertIntoRouteHistoryCollection(routeHistory);
-        posts = await findPostsByPostIds(postsIds, {populate:populateRoute , limit , sort : {} , page : parseInt(`${page}`)});
+        // posts = await findPostsByPostIds(postsIds, {populate:populateRoute , limit , sort : {} , page : parseInt(`${page}`)});
                 // posts = await searchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
                 // await insertIntoRouteHistoryCollection(routeHistory);
-                // log(`filterSearchedRoutes ::: ${posts.length}`)
+        // log(`filterSearchedRoutes ::: ${posts.length}`)
+        return res.send({
+            message: "success",
+            data:routes,
+        });
+    } catch (error) {
+        return res.send({
+            message: `error : ${error}`,
+            data:[],
+        });
+    }
     } else {
         posts = await queryRoutes({populate:populateArray,limit });
     }
@@ -480,6 +546,31 @@ try {
             }
         }
 }
+/// getRoutesByTrendingRoutesCategory
+const getRoutesByTrendingRoutesCategory = async (param: GetPostParam): Promise<IRoute[]> => {
+    try {
+        
+    
+      /// Pagination
+      const page: number = param.page || 1;  // Default to page 1, not 10
+      const limit: number = param.limit || 10;
+     const skip: number = (page - 1) * limit; 
+ 
+     
+     const totalRecords = await Route.countDocuments(); // Count only matching posts
+     const totalPages = Math.ceil(totalRecords / limit);
+     const pagination =  {currentPage: page, limit: limit, totalRecords,totalPages,};
+     log(`pagination ::: ${JSON.stringify(pagination)}`)
+    log(`filter_searched_routes filter ::: ${JSON.stringify(param.filter)}`)
+    return await Route.find(param.filter ?? {})
+        .populate(param.populate)
+        .sort(param.sort)
+            .skip(skip ?? 0).limit(limit).exec();
+        } catch (error) {
+            throw new Error(`Error at getRoutesByTrendingRoutesCategory :: ${error}`)
+        }
+}
+
 // </getPost>
 
 const findPostsByTrendingRoutes = async (
@@ -618,6 +709,8 @@ const searchRoutes = async (filter: {}): Promise<Types.ObjectId[]> => {
         throw Error(`Error getting posts ids of searched routes => ${error}`)
     }
 }
+
+
 
 const findPostsByRouteIds = async (routeIds: Types.ObjectId[], param: GetPostParam): Promise<IPost[]> => {
 

@@ -77,17 +77,19 @@ export const Seat = mongoose.model<ISeat>('Seat', SeatSchema);
 
 
 export interface IMidPoint extends Document {
-    city: mongoose.Types.ObjectId;
-    arrivalTime: Date;
-    departureTime: Date;
+    city: mongoose.Types.ObjectId,
+    // arrivalTime: Date;
+    // departureTime: Date;
+    averageDrivingtime: Date,
     description: string,
     price: number
 }
 
 const MidPointSchema: Schema = new Schema<IMidPoint>({
     city: { type: Schema.Types.ObjectId, ref: 'City', required: true },
-    arrivalTime: { type: Date },
-    departureTime: { type: Date },
+    // arrivalTime: { type: Date },
+    averageDrivingtime: { type: Date },
+    // departureTime: { type: Date },
     description: { type: String },
     price: { type: Number }
 });
@@ -134,7 +136,8 @@ export interface IRoute extends Document {
     scheduleDate: Date;
     pricePerTraveller: number;
     midpoints: IMidPoint[];
-    image: string;
+    image: string | null;
+    description: string;
     createdAt: Date;
     seats: mongoose.Types.ObjectId[];
 }
@@ -149,6 +152,8 @@ const RouteSchma: Schema = new Schema<IRoute>({
     midpoints: [MidPointSchema],
     createdAt: { type: Date, default: Date.now },
     seats: [SeatSchema],
+    description: { type: String },
+    image: { type: String }
 });
 
 export const Route = mongoose.model<IRoute>('Route', RouteSchma);
