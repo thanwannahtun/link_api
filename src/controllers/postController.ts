@@ -360,10 +360,10 @@ export const uploadNewPost = async (req: Request, res: Response) => {
             throw Error(`Post did not save ! ${savedpost.id}`)
             }
             log(post.toJSON());
-            
-            res.send({
+            const populatedPost = await Post.findById(post._id).populate(populateRoute).exec();
+            res.status(201).send({
                 message: "success",
-                data:post
+                data: [populatedPost]
             })
             
         } catch (error) {
