@@ -302,7 +302,7 @@ export const insertPostMe = async (req: Request, res: Response) => {
 }
 */
 interface GetPostQuery  {
-    categoryType?: "trending" | "sponsored" | "suggested" | "filter_searched_routes" | "trending_routes" | "post_with_routes";
+    categoryType?: "trending" | "sponsored_routes" | "suggested_routes" | "searched_routes" | "trending_routes" | "post_with_routes";
     agency_id?: string,
     limit?: number,
     page?: number,
@@ -436,11 +436,14 @@ try {
             message: "success",
             status: 200
         })
-    } else
-       
-    if (categoryType === "sponsored") {
+    } else if (categoryType === "sponsored_routes") {
+        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter: {}, limit, });
         // posts = await getSponsoredPosts();
-                posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
+                // posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
+        return res.send({
+            message: "success",
+            data: routes,
+        });
     } else if (categoryType === "trending") {
         const aggregatedRoutes :AggregatedRoute[] = await getTrendingRoutes();
         log(`aggregatedRoutes => ${JSON.stringify(aggregatedRoutes)}`)
@@ -460,9 +463,17 @@ try {
             data:posts,
         });
                 // posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
-    } else if (categoryType === "suggested") {
-                posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
-    } else if (categoryType === "filter_searched_routes") {
+    } else if (categoryType === "suggested_routes") {
+        // posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
+        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter:{}, limit,  sort:{"createdAt":-1} });
+        // posts = await getSponsoredPosts();
+        // posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
+        return res.send({
+            message: "success",
+            data: routes,
+        });
+
+    } else if (categoryType === "searched_routes") {
         try {
         const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({
             populate: [populateAgency, "origin", "destination", populateMidpoints], filter, limit, });
@@ -549,8 +560,6 @@ try {
 /// getRoutesByTrendingRoutesCategory
 const getRoutesByTrendingRoutesCategory = async (param: GetPostParam): Promise<IRoute[]> => {
     try {
-        
-    
       /// Pagination
       const page: number = param.page || 1;  // Default to page 1, not 10
       const limit: number = param.limit || 10;
@@ -924,13 +933,13 @@ export const getPostByCategory = async (req: Request, res: Response) => {
 try {
     let posts: IPost[] = [];
     // const limit: number = parseInt((req.query.limit ?? 10) as string);
-            if (categoryType === "sponsored") {
+            if (categoryType === "sponsored_routes") {
                 posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
             } else if (categoryType === "trending") {
                 posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
-            } else if (categoryType === "suggested") {
+            } else if (categoryType === "suggested_routes") {
                 posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
-            } else if (categoryType === "filter_searched_routes") {
+            } else if (categoryType === "searched_routes") {
                 posts = await filterSearchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
                 await insertIntoRouteHistoryCollection(routeHistory);
                 log(`filterSearchedRoutes ::: ${posts.length}`)
