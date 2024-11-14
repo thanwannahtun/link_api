@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 
-
 import { IPost, Like, Post, ILike, RouteHistory, Route, IRoute } from "../models/model.js";
 import { log } from "console";
 
@@ -301,20 +300,33 @@ export const insertPostMe = async (req: Request, res: Response) => {
 
 }
 */
-interface GetPostQuery  {
-    categoryType?: "trending" | "sponsored_routes" | "suggested_routes" | "searched_routes" | "trending_routes" | "post_with_routes";
-    agency_id?: string,
+interface PAGINATION_QUERY {
     limit?: number,
     page?: number,
-    post_id?:string
 }
- export interface GetPostParam {
+
+type CategoryType = "trending" | "sponsored_routes" | "suggested_routes" | "searched_routes" | "trending_routes" | "post_with_routes";
+/// changed name GetPostQuery to GET_ROUTE_QUERY
+interface GET_ROUTE_POST_QUERY  {
+    categoryType?: CategoryType, agency_id?: string,
+    post_id?: string,
+    searchedRouteQuery?: SEARCHED_ROUTE_QUERY,
+    paginationQuery?:PAGINATION_QUERY,
+}
+
+ export interface GET_ROUTE_POST_PARAM {
     limit?: number;
     populate: PopulateOptions | (string | PopulateOptions)[];
     sort?: {}, 
      page?: number,
      filter?:{}
 }
+interface SEARCHED_ROUTE_QUERY {
+    origin?: string,
+    destination?: string,
+    date?: string,
+}
+
 
 // <uploadPost >
 export const uploadNewPost = async (req: Request, res: Response) => {
@@ -381,25 +393,29 @@ export const uploadNewPost = async (req: Request, res: Response) => {
 // </getPost>
 export const getPostRoutesByCategory = async (req: Request, res: Response) => {
 
-    const { categoryType, agency_id , limit , page , post_id } = req.query as GetPostQuery;
-    const routeHistory = req.body as GET_ROUTE_REQUEST_BODY;
-
-    log(`GetPostQuery ::: ${JSON.stringify(req.query)}`)
-
+    const {
+        categoryType, agency_id,
+        paginationQuery: { limit, page } = {}, // Destructuring within a specific query
+        post_id,
+        searchedRouteQuery,
+    } = req.query as GET_ROUTE_POST_QUERY;
+    
+    const { origin,destination,date } = req.query as SEARCHED_ROUTE_QUERY;
     /// Filter
     const filter : any = {} ;
-    if (routeHistory.origin ) {
-        filter["origin"] = routeHistory.origin; // Assuming origin is of type ObjectId
+    if (searchedRouteQuery?.origin !== null) {
+        filter["origin"] = origin; // Assuming origin is of type ObjectId
     }
-    if (routeHistory.destination) {
-        filter["destination"] = routeHistory.destination; // Assuming destination is of type ObjectId
+    if (searchedRouteQuery?.destination !== null) {
+        log(`destination exists : ${destination}`)
+        filter["destination"] = destination; // Assuming destination is of type ObjectId
     }
-    if (routeHistory.date) {
-        filter["scheduleDate"] = {$gte:new Date(routeHistory.date)}; // Filtering by date
+    if (date) {
+        filter["scheduleDate"] = {$gte:new Date(date)}; // Filtering by date
     }
     /// Filter Posts by AgencyId 
     if (agency_id) {
-        filter["agency"] = agency_id; // Assuming destination is of type ObjectId
+        filter["agency"] = agency_id; 
     }
    
 try {
@@ -477,9 +493,10 @@ try {
         try {
         const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({
             populate: [populateAgency, "origin", "destination", populateMidpoints], filter, limit, });
-        // const postsIds = await searchRoutes( filter );
-        log(`filter_searched_routes routes :length: ${routes.length}`)
-        await insertIntoRouteHistoryCollection(routeHistory);
+            // const postsIds = await searchRoutes( filter );
+            // Debug: Log the constructed filter object
+            log(`filter ::: ${JSON.stringify(filter)}`);
+            await insertIntoRouteHistoryCollection(filter?? {});
         // posts = await findPostsByPostIds(postsIds, {populate:populateRoute , limit , sort : {} , page : parseInt(`${page}`)});
                 // posts = await searchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
                 // await insertIntoRouteHistoryCollection(routeHistory);
@@ -495,7 +512,9 @@ try {
         });
     }
     } else {
-        posts = await queryRoutes({populate:populateArray,limit });
+        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({
+            populate: [populateAgency, "origin", "destination", populateMidpoints], filter, limit,
+        });
     }
             return res.send(
                 {
@@ -514,20 +533,20 @@ try {
             );
     }
 
-    async function getSponsoredPost(param: GetPostParam) {
+    async function getSponsoredPost(param: GET_ROUTE_POST_PARAM) {
         return queryRoutes(param);
      }
-     async function getTrendingPost(param: GetPostParam) {
+     async function getTrendingPost(param: GET_ROUTE_POST_PARAM) {
         return queryRoutes(param);
      }
-     async function getPostsByAsc(param: GetPostParam) {
+     async function getPostsByAsc(param: GET_ROUTE_POST_PARAM) {
          return queryRoutes(param);
      }
-    async function searchedRoutes(param: GetPostParam) {
+    async function searchedRoutes(param: GET_ROUTE_POST_PARAM) {
          return queryRoutes(param);
      }
  
-     async function queryRoutes (param: GetPostParam): Promise<IPost[]> {
+     async function queryRoutes (param: GET_ROUTE_POST_PARAM): Promise<IPost[]> {
              log(`===============(( queryRoutes Param ::: ${JSON.stringify(param)}`);
          /// Pagination
          const page: number = parseInt(req.query.page as string, 10) || 1;
@@ -558,14 +577,13 @@ try {
         }
 }
 /// getRoutesByTrendingRoutesCategory
-const getRoutesByTrendingRoutesCategory = async (param: GetPostParam): Promise<IRoute[]> => {
+const getRoutesByTrendingRoutesCategory = async (param: GET_ROUTE_POST_PARAM): Promise<IRoute[]> => {
     try {
       /// Pagination
       const page: number = param.page || 1;  // Default to page 1, not 10
       const limit: number = param.limit || 10;
      const skip: number = (page - 1) * limit; 
  
-     
      const totalRecords = await Route.countDocuments(); // Count only matching posts
      const totalPages = Math.ceil(totalRecords / limit);
      const pagination =  {currentPage: page, limit: limit, totalRecords,totalPages,};
@@ -584,7 +602,7 @@ const getRoutesByTrendingRoutesCategory = async (param: GetPostParam): Promise<I
 
 const findPostsByTrendingRoutes = async (
     trendingRoutes: AggregatedRoute[],
-    param: GetPostParam
+    param: GET_ROUTE_POST_PARAM
 ): Promise<IPost[]> => {
     try {
         // Step 1: Get routeIds from trending routes
@@ -604,12 +622,28 @@ const findPostsByTrendingRoutes = async (
 };
 
 
-async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
-    log(`
-        insertIntoRouteHistoryCollection :::: ${routeHistory.origin}-${routeHistory.destination}-${routeHistory.date}
-        `)
-    if (routeHistory.origin !== null && routeHistory.destination !== null) {
-        RouteHistory.create(routeHistory);
+async function insertIntoRouteHistoryCollection(searchedRouteQuery: SEARCHED_ROUTE_QUERY) {
+
+    if (searchedRouteQuery.origin !== null && searchedRouteQuery.destination !== null) {
+        // Type conversion for MongoDB compatibility
+        try {
+            let date;
+            if (searchedRouteQuery.date) {
+                date = new Date(searchedRouteQuery.date);
+            }
+            var history = {
+                // ...searchedRouteQuery,
+                date: date,
+                origin: new mongoose.Types.ObjectId(searchedRouteQuery.origin),
+                destination: new mongoose.Types.ObjectId(searchedRouteQuery.destination)
+            };
+
+            log(`history ${JSON.stringify(history)}`)
+            await RouteHistory.create(history);
+            console.log("Route history successfully inserted.");
+        } catch (error) {
+            console.error("Failed to insert into RouteHistory:", error);
+        }
     }
 }
 
@@ -721,7 +755,7 @@ const searchRoutes = async (filter: {}): Promise<Types.ObjectId[]> => {
 
 
 
-const findPostsByRouteIds = async (routeIds: Types.ObjectId[], param: GetPostParam): Promise<IPost[]> => {
+const findPostsByRouteIds = async (routeIds: Types.ObjectId[], param: GET_ROUTE_POST_PARAM): Promise<IPost[]> => {
 
     let posts: IPost[] = [];
 
@@ -732,7 +766,7 @@ const findPostsByRouteIds = async (routeIds: Types.ObjectId[], param: GetPostPar
         throw Error(`Error finding posts by route_ids => ${error}`);
     }
 }
-const findPostsByPostIds = async (postIds: Types.ObjectId[], param: GetPostParam): Promise<IPost[]> => {
+const findPostsByPostIds = async (postIds: Types.ObjectId[], param: GET_ROUTE_POST_PARAM): Promise<IPost[]> => {
      /// Pagination
     const page: number = param.page || 1;  // Default to page 1, not 10
      const limit: number = param.limit || 10;
@@ -857,18 +891,13 @@ export const getPosts = async (req: Request, res: Response) => {
     }
 }
 */
-interface ROUTE_HISTORY {
-    origin: string,
-    destination: string, 
-    date: Date,
-}
-
-interface GET_ROUTE_REQUEST_BODY extends ROUTE_HISTORY {}
 
 export const getPostByCategory = async (req: Request, res: Response) => {
 
-    const { categoryType, agency_id , limit } = req.query as GetPostQuery;
-    const routeHistory = req.body as GET_ROUTE_REQUEST_BODY;
+    const { categoryType, agency_id, 
+        paginationQuery: { limit, page } = {}, // Destructuring within a specific query
+        searchedRouteQuery
+        } = req.query as GET_ROUTE_POST_QUERY;
 
     log(`GetPostQuery ::: ${JSON.stringify(req.query)}`)
 
@@ -908,22 +937,22 @@ export const getPostByCategory = async (req: Request, res: Response) => {
 
     // Constructing the filter object
     const filter : any = {} ;
-    if (routeHistory.origin ) {
-        filter["origin"] = routeHistory.origin; // Assuming origin is of type ObjectId
+    if (searchedRouteQuery?.origin ) {
+        filter["origin"] = searchedRouteQuery.origin; // Assuming origin is of type ObjectId
     }
-    if (routeHistory.destination) {
-        filter["destination"] = routeHistory.destination; // Assuming destination is of type ObjectId
+    if (searchedRouteQuery?.destination) {
+        filter["destination"] = searchedRouteQuery.destination; // Assuming destination is of type ObjectId
     }
-    if (routeHistory.date) {
-        filter["scheduleDate"] = {$gte:new Date(routeHistory.date)}; // Filtering by date
+    if (searchedRouteQuery?.date) {
+        filter["scheduleDate"] = {$gte:new Date(searchedRouteQuery.date)}; // Filtering by date
     }
     /// Filter Posts by AgencyId 
     if (agency_id) {
-        filter["agency"] = agency_id; // Assuming destination is of type ObjectId
+        filter["agency"] = agency_id; // 
     }
 
     
-    async function insertIntoRouteHistoryCollection(routeHistory: ROUTE_HISTORY) {
+    async function insertIntoRouteHistoryCollection(routeHistory: SEARCHED_ROUTE_QUERY) {
         log(`insertIntoRouteHistoryCollection :::: ${routeHistory.origin}-${routeHistory.destination}-${routeHistory.date}`)
         if (routeHistory.origin !== null && routeHistory.destination !== null) {
             RouteHistory.create(routeHistory);
@@ -941,13 +970,11 @@ try {
                 posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
             } else if (categoryType === "searched_routes") {
                 posts = await filterSearchedRoutes({ populate: populateArray, sort: { "scheduleDate": -1 }, limit });
-                await insertIntoRouteHistoryCollection(routeHistory);
+                await insertIntoRouteHistoryCollection(searchedRouteQuery ?? {});
                 log(`filterSearchedRoutes ::: ${posts.length}`)
             } else {
                 posts = await queryRoutes({populate:populateArray,limit });
             }
-            
-
     
             return res.send(
                 {
@@ -966,18 +993,18 @@ try {
             );
     }
 
-    async function getSponsoredPost(param: GetPostParam) {
+    async function getSponsoredPost(param: GET_ROUTE_POST_PARAM) {
        return queryRoutes(param);
     }
 
-    async function getTrendingPost(param: GetPostParam) {
+    async function getTrendingPost(param: GET_ROUTE_POST_PARAM) {
        return queryRoutes(param);
     }
 
-    async function getPostsByAsc(param: GetPostParam) {
+    async function getPostsByAsc(param: GET_ROUTE_POST_PARAM) {
         return queryRoutes(param);
     }
-    async function filterSearchedRoutes(param: GetPostParam) {
+    async function filterSearchedRoutes(param: GET_ROUTE_POST_PARAM) {
         return queryRoutes(param);
     }
 
@@ -985,7 +1012,7 @@ try {
 
     
 
-    async function queryRoutes (param: GetPostParam): Promise<IPost[]> {
+    async function queryRoutes (param: GET_ROUTE_POST_PARAM): Promise<IPost[]> {
 
             log(`===============(( queryRoutes Param ::: ${JSON.stringify(param)}`);
             

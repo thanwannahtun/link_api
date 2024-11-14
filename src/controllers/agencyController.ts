@@ -1,12 +1,12 @@
 import { Response, Request } from "express";
 import { log } from "console";
 import { Agency, IAgency, Post } from "../models/model.js";
-import { GetPostParam } from "./postController.js";
+import { GET_ROUTE_POST_PARAM } from "./postController.js";
 
 interface GetAgencyQuery { agency_id?: string, limit?: number, sort?: {} }
 /// const limit: number = parseInt((req.query.limit ?? 10) as string);
 
-interface GetAgencyParam extends GetPostParam, GetAgencyQuery { }
+interface GetAgencyParam extends GET_ROUTE_POST_PARAM, GetAgencyQuery { }
 export const getAgencyByQuery = async (req: Request, res: Response) => {
     const { agency_id, limit, sort } = req.query as GetAgencyQuery;
     log(`Request Query::: ${JSON.stringify(req.query)}`);
