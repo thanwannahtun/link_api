@@ -1,6 +1,8 @@
 import { Response, Request } from "express";
 import { log } from "console";
-import { Agency, IAgency } from "../models/model.js";
+import crypto from "crypto";
+import { Agency, IAgency, User, VerificationCode } from "../models/model.js";
+import { sendVerificationEmail } from "../middlewares/nodemailer.js";
 
 async function checkAgency(email: String, password: String): Promise<IAgency | null> {
 
@@ -127,3 +129,70 @@ export const signOutAgency = async (req: Request, res: Response) => {
     }
 
 }
+
+export const sendCode = async (req: Request, res: Response) => {
+    const { email } = req.body;
+    log(`body => email : ${email}`);
+
+    try {
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: 'Email already registered' });
+        }
+
+        // Generate a random 6-digit code
+        const code = crypto.randomInt(100000, 999999).toString();
+        // Store the code in the database with expiry (1 mins)
+        // VerificationCode.
+        await VerificationCode.create({
+            email,
+            code,
+            expiresAt: new Date(Date.now() + (5) * 60 * 1000),
+        });
+
+        await sendVerificationEmail(email, code);
+        res.json({ success: true, message: 'Verification code sent' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: `Error : ${error}` });
+    }
+}
+export const verifyCode = async (req: Request, res: Response) => {
+    const { email, code, name, password } = req.body;
+
+    // Validate the input
+    if (!email || !code) {
+        return res.status(400).json({ success: false, message: 'Email and code are required.' });
+    }
+    try {
+        // Find the code in the database
+        const record = await VerificationCode.findOne({ email, code });
+
+        if (!record) {
+            return res.status(400).json({ success: false, message: 'Invalid verification code.' });
+        }
+
+        // Check if the code has expired
+        if (record?.expiredAt?.getTime() < Date.now()) {
+            return res.status(400).json({ success: false, message: 'Verification code has expired.' });
+        }
+
+        // Register the user
+        const newUser = await User.create({ email, name, password });
+
+        // Delete the verification code record only if the user creation is successful
+        await VerificationCode.deleteOne({ email, code });
+        // Return success
+        res.json({
+            success: true,
+            message: 'Verification successful.',
+            user: { id: newUser._id, email: newUser.email }, // Expose only necessary fields
+        });
+    } catch (error) {
+        console.error('Error during verification:', error);
+        res.status(500).json({ success: false, message: 'Internal server error.' });
+
+    }
+}
+
+

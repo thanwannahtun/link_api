@@ -26,11 +26,13 @@
     "typescript": "^5.5.4"
   },
   "dependencies": {
+    "@types/nodemailer": "^6.4.17",
     "cookie": "^0.7.1",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "mongoose": "^8.5.2",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.16",
     "sharp": "^0.33.5"
   }
 }

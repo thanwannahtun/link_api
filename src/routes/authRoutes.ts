@@ -1,7 +1,7 @@
 
 
 import { Router } from 'express';
-import { signInAgency, signOutAgency, signUpAgency } from '../controllers/authController.js';
+import { signInAgency, signOutAgency, signUpAgency, sendCode, verifyCode } from '../controllers/authController.js';
 import { checkEmailAndPassword } from '../middlewares/auth/checkEmailAndPassword.js';
 
 const router = Router();
@@ -12,5 +12,8 @@ router.post('/sign_in', checkEmailAndPassword, signInAgency);
 // ? : Create New Agency
 router.post('/sign_up', checkEmailAndPassword, signUpAgency);
 router.post('/sign_out', checkEmailAndPassword, signOutAgency);
+
+router.post('/sign_up/send_code', sendCode);
+router.post('/sign_up/verify_code', verifyCode);
 
 export default router;

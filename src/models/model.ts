@@ -1,4 +1,18 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+export interface IVerificationCode extends Document {
+    code: string;
+    email: string;
+    expiredAt: Date;
+}
+
+const verificationCodeSchema = new mongoose.Schema({
+    email: { type: String, required: true },
+    code: { type: String, required: true },
+    expiresAt: { type: Date, required: true },
+});
+
+export const VerificationCode = mongoose.model<IVerificationCode>('VerificationCode', verificationCodeSchema);
+
 
 export interface IUser extends Document {
     name: string;
