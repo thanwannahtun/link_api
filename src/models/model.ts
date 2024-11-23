@@ -3,12 +3,16 @@ export interface IVerificationCode extends Document {
     code: string;
     email: string;
     expiredAt: Date;
+    // isVerified: boolean,
+    createdAt: Date
 }
 
 const verificationCodeSchema = new mongoose.Schema({
     email: { type: String, required: true },
     code: { type: String, required: true },
-    expiresAt: { type: Date, required: true },
+    expiredAt: { type: Date, required: true },
+    // isVerified: { type: Boolean },
+    createdAt: { type: Date, default: Date.now() },
 });
 
 export const VerificationCode = mongoose.model<IVerificationCode>('VerificationCode', verificationCodeSchema);
@@ -21,9 +25,9 @@ export interface IUser extends Document {
 }
 
 const userSchema = new Schema<IUser>({
-    name: { type: String, required: true },
+    name: { type: String },
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true }
+    password: { type: String }
 });
 
 export const User = mongoose.model<IUser>('User', userSchema);

@@ -135,24 +135,67 @@ export const sendCode = async (req: Request, res: Response) => {
     log(`body => email : ${email}`);
 
     try {
-        // Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ success: false, message: 'Email already registered' });
+        // // Check if user already exists
+        // const existingUser = await User.findOne({ email });
+        // if (existingUser) {
+        //     return res.status(400).json({ success: false, message: 'Email already registered' });
+        // }
+        const now = new Date();
+
+        // Check for an existing verification record
+        let record = await VerificationCode.findOne({ email });
+
+        if (record) {
+            const timeSinceLastSend = (now.getTime() - record.createdAt.getTime()) / (60 * 1000); // Minutes
+            const RATE_LIMIT_MINUTES = 5;
+
+            // Enforce rate limiting
+            if (timeSinceLastSend < RATE_LIMIT_MINUTES) {
+                return res.status(429).json({
+                    success: false,
+                    message: `Please wait ${Math.ceil(RATE_LIMIT_MINUTES - timeSinceLastSend)} minute(s) before requesting another code.`,
+                });
+            }
+
+            // If the code is still valid, reuse it
+            if (record.expiredAt.getTime() > now.getTime()) {
+                await sendVerificationEmail(email, record.code);
+                return res.json({
+                    success: true,
+                    message: 'Verification code resent successfully.',
+                });
+            }
         }
 
-        // Generate a random 6-digit code
-        const code = crypto.randomInt(100000, 999999).toString();
-        // Store the code in the database with expiry (1 mins)
-        // VerificationCode.
-        await VerificationCode.create({
-            email,
-            code,
-            expiresAt: new Date(Date.now() + (5) * 60 * 1000),
+        // Generate a new code if no valid code exists
+        const newCode = crypto.randomInt(100000, 999999).toString();
+        // const newCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+        const newExpiration = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes expiration
+
+        if (record) {
+            // Update the existing record
+            record.code = newCode;
+            record.expiredAt = newExpiration;
+            record.createdAt = now;
+            await record.save();
+        } else {
+            // Create a new verification record
+            record = await VerificationCode.create({
+                email,
+                code: newCode,
+                expiredAt: newExpiration,
+                createdAt: now,
+            });
+        }
+
+        // Send the new code via email
+        await sendVerificationEmail(email, newCode);
+
+        res.json({
+            success: true,
+            message: 'Verification code sent successfully.',
         });
 
-        await sendVerificationEmail(email, code);
-        res.json({ success: true, message: 'Verification code sent' });
     } catch (error) {
         res.status(500).json({ success: false, message: `Error : ${error}` });
     }
@@ -181,7 +224,7 @@ export const verifyCode = async (req: Request, res: Response) => {
         const newUser = await User.create({ email, name, password });
 
         // Delete the verification code record only if the user creation is successful
-        await VerificationCode.deleteOne({ email, code });
+        // await VerificationCode.deleteOne({ email, code });
         // Return success
         res.json({
             success: true,
@@ -196,3 +239,74 @@ export const verifyCode = async (req: Request, res: Response) => {
 }
 
 
+export const resendCode = async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    // Validate input
+    if (!email) {
+        return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    try {
+        // Find existing verification record
+        let record = await VerificationCode.findOne({ email });
+
+        // Check if a code was recently sent
+        const RATE_LIMIT_MINUTES = 5; // Adjust as per requirements
+        const now = new Date();
+
+        if (record) {
+            const delay = 60 * 5; // delya 5 minutes
+            const timeSinceLastSend = (now.getTime() - record.createdAt.getTime()) / (delay * 1000);
+            if (timeSinceLastSend < RATE_LIMIT_MINUTES) {
+                return res.status(429).json({
+                    success: false,
+                    message: `Please wait ${Math.ceil(RATE_LIMIT_MINUTES - timeSinceLastSend)} minute(s) before requesting another code.`,
+                });
+            }
+
+            // Reuse the existing code if it hasn’t expired
+            if (record.expiredAt.getTime() > now.getTime()) {
+                await sendVerificationEmail(email, record.code); // Resend the existing code
+                return res.json({
+                    success: true,
+                    message: 'Verification code resent successfully.',
+                });
+            }
+        }
+
+        // Generate a new code if no valid code exists
+        const newCode = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit random code
+        const newExpiration = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes from now
+        if (record) {
+            // Update the existing record
+            record.code = newCode;
+            record.expiredAt = newExpiration;
+            record.createdAt = now;
+            await record.save();
+        } else {
+            // Create a new record
+            record = await VerificationCode.create({
+                email,
+                code: newCode,
+                expiredAt: newExpiration,
+                createdAt: now,
+            });
+        }
+
+        // Send the new code via email
+        await sendVerificationEmail(email, newCode);
+
+        // Respond to the client
+        res.json({
+            success: true,
+            message: 'A new verification code has been sent to your email.',
+        });
+    } catch (error) {
+        console.error('Error during resendCode:', error);
+        res.status(500).json({
+            success: false,
+            message: 'An error occurred while resending the verification code. Please try again later.',
+        });
+    }
+}
