@@ -28,7 +28,7 @@ app.use('/api', routes);
 
 // const mongoURI = process.env.DATABASE_ATLAS_URL as string;
 // const mongoURI = process.env.DATABASE_URL as string;
-const mongoURI = `${process.env.LOCAL_DB_URL}`;
+const mongoURI = `${process.env.DATABASE_ATLAS_URL}`;
 
 
 mongoose.connect(mongoURI, {})
