@@ -2,10 +2,11 @@ import { Request, Response } from "express";
 
 import { IPost, Like, Post, ILike, RouteHistory, Route, IRoute } from "../models/model.js";
 import { log } from "console";
-
-import path, { dirname } from 'path';
+import fs from "fs";
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import mongoose, { PopulateOptions, Types } from "mongoose";
+import { Cloudinary } from "../config/cloudinary.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -327,18 +328,98 @@ interface SEARCHED_ROUTE_QUERY {
     date?: string,
 }
 
-
 // <uploadPost >
 export const uploadNewPost = async (req: Request, res: Response) => {
     const { agency, title, description } = req.body as IPost;
     
     const { routes }: { routes: IRoute[] } = req.body;
     try {
-
+        // console.log(`req.body ==> ${routes.map(i => JSON.stringify(i))}`);
         const post: IPost = new Post({ title, description, agency });
         try {
-
             if (req.files) {
+            /// assign image url from the cloud to the corresponding route 
+            const files = req.files as Express.Multer.File[]; // Multer uploaded files
+            // console.log("Uploaded files:", files.map(f => {fieldname: f.fieldname,originalname: f.originalname, path: f.path });
+                // Upload files to Cloudinary and map them
+                await Promise.all(
+                    files.map(async (file) => {
+                        const secureUrl = await Cloudinary.uploadSingle(file);
+                        return { originalname: file.originalname, secureUrl };
+                    })
+                ).then((values) => {
+                    log(`Cloudinary upload success ${values.length} `);
+                    // Match files to routes
+                    routes.forEach((route) => {
+                        const matchedFile = values.find((f) => f.originalname === route.image); // Match based on description
+                        route.image = matchedFile ? matchedFile.secureUrl : null;
+                    });
+
+                    /// clean up temp stored files
+                    _cleanUpTemporaryFile(files.map(file => file.path));
+
+                }).catch((error) => {
+                    console.error(` Cloudinary upload fail ${error}`);
+                    throw new Error("Failed to upload to Cloudinary!")
+                });
+            };
+            
+            const routeIds: Types.ObjectId[] = [];
+            const promises = routes.map(async (route) => {
+                const savedRoute = new Route({ ...route, post: post.id });
+                await savedRoute.save();
+                log(savedRoute.toJSON());
+                routeIds.push(savedRoute._id as Types.ObjectId);
+            });
+            // Push saved route's id to the routeIds array
+            await Promise.all(promises);
+            log(`routeIds :: ${routeIds.length}`);
+            post.routes = routeIds;// add routeIds to post
+            const savedpost = await post.save();
+            if (!savedpost._id) {
+            /// throw Error
+                throw Error(`Post did not save ! ${savedpost.id}`)
+            };
+            log(post.toJSON());
+            const populatedPost = await Post.findById(post._id).populate(populateRoute).exec();
+            res.status(201).send({
+                message: "success",
+                data: [populatedPost]
+            });
+            
+        } catch (error) {
+            throw new Error(`${error}`)
+        }
+       
+    } catch (error) {
+        return res.status(500).json({
+            error: "error",
+            message: `Internal Error ${error}`,
+        });
+    }
+}
+
+/**
+ * 
+ * **filePaths**  `string[]`
+ * 
+ * clean the temporary stored files 
+ * 
+ * Optional: Delete original uncompressed images
+ * 
+ */
+function _cleanUpTemporaryFile(filePaths:string[]){
+    filePaths.forEach(path => {
+        fs.unlink(path, (err) => {
+            if (err) {
+                console.error(`Failed to delete original image: ${path}, Error: ${err.message}`);
+            }
+            log(`deteted images path :: ${path}`);
+        });
+    });
+}
+/*
+   if (req.files) {
                 // const files = (req.files as Express.Multer.File[]).map(file => `/uploads/${path.basename(file.path)}`);
                 const files = (req.files as Express.Multer.File[]);
                 let fileIndex = 0;
@@ -354,41 +435,7 @@ export const uploadNewPost = async (req: Request, res: Response) => {
                 
                 // post.images = images;
             }
-
-            const routeIds: Types.ObjectId[] = [];
-                for (const route of routes) {
-                    const savedRoute = new Route({...route, post:post.id});
-                    await savedRoute.save();
-                    log(savedRoute.toJSON());
-                    routeIds.push(savedRoute._id as Types.ObjectId);
-                }
-        log(`routeIds :: ${routeIds.length}`);
-            // Add image paths to the post
-       
-        post.routes = routeIds; // add post routes ids
-        const savedpost = await post.save();
-        if (!savedpost._id) {
-            /// throw Error
-            throw Error(`Post did not save ! ${savedpost.id}`)
-            }
-            log(post.toJSON());
-            const populatedPost = await Post.findById(post._id).populate(populateRoute).exec();
-            res.status(201).send({
-                message: "success",
-                data: [populatedPost]
-            })
-            
-        } catch (error) {
-            throw Error(`eRRor :: ${error}`)
-        }
-       
-    } catch (error) {
-        return  res.status(500).json({
-            error:"error",
-            message: `Internal Error ${error}`,
-        })
-    }
-}
+*/
 // </uploadPost>
 // </getPost>
 export const getPostRoutesByCategory = async (req: Request, res: Response) => {
@@ -446,14 +493,14 @@ try {
             status: 200
         })
     } else if (categoryType === "trending_routes") {
-    const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter: {}, limit, });
+    const routes: IRoute[] = await getRoutesRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter: {}, limit, });
         return res.send({
             data: routes,
             message: "success",
             status: 200
         })
     } else if (categoryType === "sponsored_routes") {
-        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter: {}, limit, });
+        const routes: IRoute[] = await getRoutesRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter: {}, limit, });
         // posts = await getSponsoredPosts();
                 // posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
         return res.send({
@@ -481,7 +528,7 @@ try {
                 // posts = await getTrendingPost({populate : populateArray , sort : {"createdAt":1} , limit});
     } else if (categoryType === "suggested_routes") {
         // posts = await getPostsByAsc({populate : populateArray , sort : {"scheduleDate":-1} , limit});
-        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter:{}, limit,  sort:{"createdAt":-1} });
+        const routes: IRoute[] = await getRoutesRoutesCategory({ populate: [populateAgency, "origin", "destination", populateMidpoints], filter:{}, limit,  sort:{"createdAt":-1} });
         // posts = await getSponsoredPosts();
         // posts = await getSponsoredPost({populate : populateArray , sort : {"createdAt":-1} , limit});
         return res.send({
@@ -491,7 +538,7 @@ try {
 
     } else if (categoryType === "searched_routes") {
         try {
-        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({
+        const routes: IRoute[] = await getRoutesRoutesCategory({
             populate: [populateAgency, "origin", "destination", populateMidpoints], filter, limit, });
             // const postsIds = await searchRoutes( filter );
             // Debug: Log the constructed filter object
@@ -512,7 +559,7 @@ try {
         });
     }
     } else {
-        const routes: IRoute[] = await getRoutesByTrendingRoutesCategory({
+        const routes: IRoute[] = await getRoutesRoutesCategory({
             populate: [populateAgency, "origin", "destination", populateMidpoints], filter, limit,
         });
     }
@@ -577,11 +624,11 @@ try {
         }
 }
 /// getRoutesByTrendingRoutesCategory
-const getRoutesByTrendingRoutesCategory = async (param: GET_ROUTE_POST_PARAM): Promise<IRoute[]> => {
+const getRoutesRoutesCategory = async (param: GET_ROUTE_POST_PARAM): Promise<IRoute[]> => {
     try {
       /// Pagination
       const page: number = param.page || 1;  // Default to page 1, not 10
-      const limit: number = param.limit || 10;
+      const limit: number = param.limit || 5; // Default limit to 5
      const skip: number = (page - 1) * limit; 
  
      const totalRecords = await Route.countDocuments(); // Count only matching posts

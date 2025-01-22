@@ -96,17 +96,17 @@ export const Seat = mongoose.model<ISeat>('Seat', SeatSchema);
 
 export interface IMidPoint extends Document {
     city: mongoose.Types.ObjectId,
-    // arrivalTime: Date;
+    arrivalTime: Date;
     // departureTime: Date;
-    averageDrivingtime: Date,
+    // averageDrivingtime: Date,
     description: string,
     price: number
 }
 
 const MidPointSchema: Schema = new Schema<IMidPoint>({
     city: { type: Schema.Types.ObjectId, ref: 'City', required: true },
-    // arrivalTime: { type: Date },
-    averageDrivingtime: { type: Date },
+    arrivalTime: { type: Date },
+    // averageDrivingtime: { type: Date },
     // departureTime: { type: Date },
     description: { type: String },
     price: { type: Number }
