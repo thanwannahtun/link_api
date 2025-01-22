@@ -29,12 +29,12 @@ app.use('/api', routes);
 
 // const mongoURI = process.env.DATABASE_ATLAS_URL as string;
 // const mongoURI = process.env.DATABASE_URL as string;
-// const mongoURI = `${process.env.DATABASE_ATLAS_URL}`;
-const mongoURI = `${process.env.LOCAL_DB_URL}`;
+const mongoURI = `${process.env.DATABASE_ATLAS_URL}`;
+// const mongoURI = `${process.env.LOCAL_DB_URL}`;
 
 
 mongoose.connect(mongoURI, {})
-    .then(() => console.log(`MongoDB connected ${mongoURI}`))
+    .then(() => console.log(`successfully connected to MongoDB`))
     .catch((e) => console.log("Error Connecting MongoDB", e));
 
 Cloudinary.confiureCloudinary();
