@@ -24,13 +24,18 @@ export class Cloudinary {
     * Configure the **Cloudinary** credentials
     */
     static confiureCloudinary() {
-        cloudinary.config({
-            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-            api_key: process.env.CLOUDINARY_API_KEY,
-            api_secret: process.env.CLOUDINARY_API_SECRECT,
-            // Return "https" URLs by setting secure: true
-            secure: true
-        });
+        try {
+            cloudinary.config({
+                cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+                api_key: process.env.CLOUDINARY_API_KEY,
+                api_secret: process.env.CLOUDINARY_API_SECRECT,
+                // Return "https" URLs by setting secure: true
+                secure: true
+            });
+            console.log(`🎉 Cloudinary configured! Cloud_name = ${process.env.CLOUDINARY_CLOUD_NAME}`);
+        } catch (error) {
+            console.error(`⚠️ Error configuring Cloudinary => ${error}`);
+        }
     }
     /**
      * upload to Cloudinary and 
@@ -57,7 +62,14 @@ export class Cloudinary {
 
             return result.secure_url;
         } catch (e) {
-            console.error(`Failed uploading file: ${e}`);
+            if (e instanceof Error) {
+                // Log the error message and stack trace
+                console.error(`⚠️ Failed uploading file: ${e.message}`);
+                console.error(e.stack);
+            } else {
+                // Handle unexpected error types
+                console.error(`⚠️ Unexpected error: ${JSON.stringify(e)}`);
+            }
             throw new Error(`Failed Uploading file to Cloudinary!`);
         }
     }
