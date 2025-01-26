@@ -35,7 +35,7 @@ const mongoURI = `${process.env.DATABASE_ATLAS_URL}`;
 
 mongoose.connect(mongoURI, {})
     .then(() => console.log(`🎉 successfully connected to MongoDB`))
-    .catch((e) => console.log("⚠️ Error Connecting MongoDB", e));
+    .catch((e) => console.log(`⚠️ Error Connecting MongoDB`, e));
 
 Cloudinary.confiureCloudinary();
 
